@@ -41,7 +41,8 @@ export async function analyzeFishingConditions(
   tide: TideData,
   moon: MoonData,
   hourlyWeather: HourlyForecast[] = [],
-  isForecast: boolean = false
+  isForecast: boolean = false,
+  language: 'zh' | 'en' = 'zh'
 ): Promise<FishingAnalysis> {
   const currentHour = new Date().getHours();
   const next12Hours = hourlyWeather.slice(0, 12).map(h => ({
@@ -51,8 +52,11 @@ export async function analyzeFishingConditions(
     precip: h.precipitationProbability
   }));
 
+  const langInstruction = language === 'en' ? 'Please provide the entire analysis in English.' : '请完全使用中文进行分析。';
+
   const prompt = `
     ${isForecast ? '【预测模式：分析明日/未来鱼情】' : '【实时模式：分析当前鱼情】'}
+    ${langInstruction}
     当前位置: ${location.city || '未知'} (纬度: ${location.latitude}, 经度: ${location.longitude})
     实时气象: 温度 ${weather.temperature}°C, 气压 ${weather.pressure} hPa, 风速 ${weather.windSpeed} km/h, 风向 ${weather.windDirection}°, 天气 ${weather.condition}
     潮汐数据: 状态 ${tide.state}, 潮汐进度 ${Math.round(tide.tideProgress * 100)}%

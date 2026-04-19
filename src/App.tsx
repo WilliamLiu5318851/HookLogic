@@ -36,6 +36,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { LocationData, WeatherData, TideData, MoonData, FishingAnalysis, HourlyForecast } from './types';
 import { fetchWeatherData, fetchMarineData, getMoonData, geocodeLocation } from './services/weatherService';
 import { analyzeFishingConditions } from './services/geminiService';
+import { i18n, type Language } from './translations';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -43,8 +44,8 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const getWindDirectionLabel = (deg: number) => {
-  const directions = ['北', '东北', '东', '东南', '南', '西南', '西', '西北'];
+const getWindDirectionLabel = (deg: number, lang: Language) => {
+  const directions = i18n[lang].windDirection;
   return directions[Math.round(deg / 45) % 8];
 };
 
@@ -60,35 +61,30 @@ const getWeatherIcon = (code: number) => {
   return <Sun className="text-amber-400" size={24} />;
 };
 
-const getWeatherLabel = (code: number) => {
-  if (code === 0) return "晴朗";
-  if (code >= 1 && code <= 3) return "多云";
-  if (code >= 45 && code <= 48) return "有雾";
-  if (code >= 51 && code <= 55) return "毛毛雨";
-  if (code >= 61 && code <= 67) return "中雨";
-  if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return "降雪";
-  if (code >= 80 && code <= 82) return "阵雨";
-  if (code >= 95) return "雷雨";
-  return "晴朗";
+const getWeatherLabel = (code: number, lang: Language) => {
+  const labels = i18n[lang].weatherLabels;
+  if (code === 0) return labels.sunny;
+  if (code >= 1 && code <= 3) return labels.cloudy;
+  if (code >= 45 && code <= 48) return labels.foggy;
+  if (code >= 51 && code <= 55) return labels.drizzle;
+  if (code >= 61 && code <= 67) return labels.rainy;
+  if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return labels.snowy;
+  if (code >= 80 && code <= 82) return labels.showers;
+  if (code >= 95) return labels.thunder;
+  return labels.sunny;
 };
 
-const getWeatherAlert = (code: number) => {
-  if (code >= 95) return {
-    title: '雷暴极致警报',
-    message: '检测到雷电和强风风险，请立即停止所有水面作业并寻找安全避所。'
-  };
-  if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return {
-    title: '极端低温/降雪警报',
-    message: '检测到降雪或寒流风险，能见度低且气压波动剧烈，请注意防冻并评估作业安全。'
-  };
-  if (code >= 61 && code <= 67 || (code >= 80 && code <= 82)) return {
-    title: '强降水警报',
-    message: '水面视线受阻且伴有颠簸浪涌，建议新手及小型船只停止作业。'
-  };
+const getWeatherAlert = (code: number, lang: Language) => {
+  const alerts = i18n[lang].weatherAlerts;
+  if (code >= 95) return alerts.thunderstorm;
+  if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return alerts.snow;
+  if (code >= 61 && code <= 67 || (code >= 80 && code <= 82)) return alerts.rain;
   return null;
 };
 
 export default function App() {
+  const [lang, setLang] = useState<Language>('zh');
+  const t = i18n[lang];
   const [location, setLocation] = useState<LocationData | null>(null);
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [tide, setTide] = useState<TideData | null>(null);
@@ -124,7 +120,8 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchDataForCoords = async (lat: number, lon: number, name?: string) => {
+  const fetchDataForCoords = async (lat: number, lon: number, name?: string, forceLang?: Language) => {
+    const currentLang = forceLang || lang;
     setLoading(true);
     setError(null);
     try {
@@ -146,17 +143,18 @@ export default function App() {
       setTide(marineData);
       setMoon(moonData);
 
-      const aiResult = await analyzeFishingConditions(loc, weatherResponse.current, marineData, moonData, weatherResponse.hourly);
+      const aiResult = await analyzeFishingConditions(loc, weatherResponse.current, marineData, moonData, weatherResponse.hourly, false, currentLang);
       setAnalysis(aiResult);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "获取数据失败。");
+      setError(err.message || (currentLang === 'zh' ? "获取数据失败。" : "Failed to fetch data."));
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchForecastForTomorrow = async () => {
+  const fetchForecastForTomorrow = async (forceLang?: Language) => {
+    const currentLang = forceLang || lang;
     if (!location || !weather) return;
     
     setIsForecastLoading(true);
@@ -180,7 +178,7 @@ export default function App() {
           windSpeed: weatherResp.tomorrow.maxWind,
           windDirection: weather?.windDirection || 0,
           isRaining: weatherResp.tomorrow.weatherCode >= 60,
-          condition: getWeatherLabel(weatherResp.tomorrow.weatherCode),
+          condition: getWeatherLabel(weatherResp.tomorrow.weatherCode, currentLang),
           weatherCode: weatherResp.tomorrow.weatherCode
         };
         
@@ -193,7 +191,7 @@ export default function App() {
         setTomorrowTide(tTide);
         setTomorrowMoon(tMoon);
 
-        const aiResult = await analyzeFishingConditions(location, tWeather, tTide, tMoon, [], true);
+        const aiResult = await analyzeFishingConditions(location, tWeather, tTide, tMoon, [], true, currentLang);
         setForecastAnalysis(aiResult);
       }
     } catch (err) {
@@ -250,6 +248,16 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (location) {
+      if (isForecastMode) {
+        fetchForecastForTomorrow(lang);
+      } else {
+        fetchDataForCoords(location.latitude, location.longitude, locationName || undefined, lang);
+      }
+    }
+  }, [lang]);
+
+  useEffect(() => {
     initData();
   }, []);
 
@@ -275,9 +283,9 @@ export default function App() {
         >
           <RefreshCw size={48} className="text-accent" />
         </motion.div>
-        <h2 className="text-2xl font-bold mb-2">正在研判鱼情...</h2>
+        <h2 className="text-2xl font-bold mb-2">{t.loadingAnalysis}</h2>
         <p className="text-text-light text-center max-w-xs">
-          正在获取实时气象、潮汐与月相数据，并交由 AI 垂钓专家进行多维分析。
+          {t.loadingDescription}
         </p>
       </div>
     );
@@ -285,15 +293,15 @@ export default function App() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-app-bg flex flex-col items-center justify-center text-text-dark p-6">
+      <div className="min-h-screen bg-app-bg flex flex-col items-center justify-center text-text-dark p-6 text-center">
         <AlertCircle size={64} className="text-red-500 mb-4" />
-        <h2 className="text-2xl font-bold mb-2">出错了</h2>
-        <p className="text-text-light mb-6 text-center">{error}</p>
+        <h2 className="text-2xl font-bold mb-2">{lang === 'zh' ? '出错了' : 'Something went wrong'}</h2>
+        <p className="text-text-light mb-6 max-w-md">{error}</p>
         <button 
           onClick={initData}
           className="px-6 py-3 bg-primary text-white hover:bg-primary/90 rounded-lg font-medium transition-colors"
         >
-          重试
+          {lang === 'zh' ? '重试' : 'Retry'}
         </button>
       </div>
     );
@@ -306,10 +314,20 @@ export default function App() {
         <div className="flex items-center justify-between w-full md:w-auto">
           <div className="flex items-center gap-2">
             <Fish size={24} className="text-accent" />
-            <h1 className="text-base md:text-lg font-bold tracking-wider uppercase">HOOKLOGIC <span className="font-normal opacity-80 hidden sm:inline">智能垂钓助手</span></h1>
+            <h1 className="text-base md:text-lg font-bold tracking-wider uppercase">HOOKLOGIC <span className="font-normal opacity-80 hidden sm:inline">{t.appDesc}</span></h1>
           </div>
           
           <div className="flex md:hidden items-center gap-2">
+            <button 
+              onClick={() => {
+                const newLang = lang === 'zh' ? 'en' : 'zh';
+                setLang(newLang);
+                if (location) fetchDataForCoords(location.latitude, location.longitude, locationName || undefined, newLang);
+              }}
+              className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors font-bold text-xs"
+            >
+              {lang === 'zh' ? 'EN' : '中'}
+            </button>
             <button 
               onClick={initData}
               className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
@@ -323,7 +341,7 @@ export default function App() {
           <form onSubmit={handleSearch} className="relative group">
             <input 
               type="text" 
-              placeholder="搜索澳洲城市或钓点 (如: Sans Souci)..." 
+              placeholder={t.searchPlaceholder} 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
@@ -333,7 +351,7 @@ export default function App() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 group-focus-within:text-primary" size={16} />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
               <span className="hidden sm:inline-block text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/10 text-white/40 border border-white/10 uppercase tracking-tighter">
-                AU Only
+                {t.auOnly}
               </span>
               {isSearching ? (
                 <RefreshCw className="text-primary animate-spin" size={14} />
@@ -358,7 +376,7 @@ export default function App() {
                 className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-slate-100 overflow-hidden z-[60]"
               >
                 <div className="p-2 max-h-[300px] overflow-y-auto">
-                  <div className="px-3 py-2 text-[10px] font-bold text-text-light uppercase border-b border-slate-50">请选择精确位置</div>
+                  <div className="px-3 py-2 text-[10px] font-bold text-text-light uppercase border-b border-slate-50">{t.selectingLocation}</div>
                   {searchResults.map((result, idx) => (
                     <button
                       key={`${result.lat}-${result.lon}-${idx}`}
@@ -384,17 +402,27 @@ export default function App() {
           <div className="flex flex-col items-end">
             <div className="flex items-center gap-1 text-xs font-bold text-accent">
               <MapPin size={12} />
-              <span className="truncate max-w-[150px]">{locationName || (location ? `${location.latitude.toFixed(2)}, ${location.longitude.toFixed(2)}` : '定位中...')}</span>
+              <span className="truncate max-w-[150px]">{locationName || (location ? `${location.latitude.toFixed(2)}, ${location.longitude.toFixed(2)}` : (lang === 'zh' ? '定位中...' : 'Locating...'))}</span>
             </div>
-            <span className="text-[10px] opacity-60 uppercase tracking-tighter">当前作业坐标</span>
+            <span className="text-[10px] opacity-60 uppercase tracking-tighter">{t.currentLocation}</span>
           </div>
           <span className="hidden lg:block bg-success px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-tighter">
-            实时更新 {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {t.realTimeUpdate} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
+          <button 
+            onClick={() => {
+              const newLang = lang === 'zh' ? 'en' : 'zh';
+              setLang(newLang);
+              if (location) fetchDataForCoords(location.latitude, location.longitude, locationName || undefined, newLang);
+            }}
+            className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded transition-colors font-bold text-xs"
+          >
+            {lang === 'zh' ? 'English' : '中文'}
+          </button>
           <button 
             onClick={initData}
             className="p-1.5 hover:bg-white/10 rounded-md transition-colors"
-            title="刷新数据"
+            title={lang === 'zh' ? '刷新数据' : 'Refresh Data'}
           >
             <RefreshCw size={18} />
           </button>
@@ -405,10 +433,10 @@ export default function App() {
       <div className="md:hidden bg-slate-800 text-white px-4 py-2 flex items-center justify-between border-t border-white/5">
         <div className="flex items-center gap-2 text-[10px] font-bold text-accent">
           <MapPin size={10} />
-          <span className="truncate max-w-[200px]">{locationName || (location ? `${location.latitude.toFixed(2)}, ${location.longitude.toFixed(2)}` : '定位中...')}</span>
+          <span className="truncate max-w-[200px]">{locationName || (location ? `${location.latitude.toFixed(2)}, ${location.longitude.toFixed(2)}` : (lang === 'zh' ? '定位中...' : 'Locating...'))}</span>
         </div>
         <span className="bg-success/20 text-success px-2 py-0.5 rounded-full text-[9px] font-bold uppercase">
-          LIVE
+          {t.realTimeUpdate}
         </span>
       </div>
 
@@ -416,7 +444,7 @@ export default function App() {
         {/* Sidebar */}
         <aside className="space-y-6 flex flex-col">
           {/* Weather Alert Banner */}
-          {(isForecastMode ? tomorrowWeather : weather) && getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode) && (
+          {(isForecastMode ? tomorrowWeather : weather) && getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang) && (
             <motion.div 
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -425,11 +453,11 @@ export default function App() {
               <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
               <div>
                 <div className="text-sm font-bold text-red-800">
-                  {getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode)?.title}
-                  {isForecastMode && <span className="ml-2 text-[10px] font-normal opacity-70">(明日预报)</span>}
+                  {getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang)?.title}
+                  {isForecastMode && <span className="ml-2 text-[10px] font-normal opacity-70">({t.tomorrowForecast})</span>}
                 </div>
                 <p className="text-xs text-red-700 leading-relaxed mt-1">
-                  {getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode)?.message}
+                  {getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang)?.message}
                 </p>
               </div>
             </motion.div>
@@ -443,7 +471,7 @@ export default function App() {
             >
               <div className="text-[10px] uppercase tracking-widest font-bold text-text-light flex items-center gap-1">
                 <Fish size={14} className="text-accent" />
-                目标鱼种 (Target Species): <span className="text-primary ml-1 truncate max-w-[120px]">{selectedFish}</span>
+                {t.targetSpecies}: <span className="text-primary ml-1 truncate max-w-[120px]">{selectedFish === '通用' ? t.fishGeneral : selectedFish}</span>
               </div>
               {isFishSelectorExpanded ? <ChevronUp size={14} className="text-text-light" /> : <ChevronDown size={14} className="text-text-light" />}
             </button>
@@ -462,7 +490,7 @@ export default function App() {
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-light/50" size={12} />
                     <input 
                       type="text"
-                      placeholder="搜索鱼种 (如 Snapper)..."
+                      placeholder={t.findSpecies}
                       value={fishSearchQuery}
                       onChange={(e) => setFishSearchQuery(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 pl-8 pr-3 text-[10px] focus:outline-none focus:border-accent transition-colors"
@@ -479,30 +507,35 @@ export default function App() {
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
                     {['通用', '真鲷(Snapper)', '黑鲷(Black Bream)', '扁头鱼(Flathead)', '澳洲三文鱼(Australian Salmon)', '鱿鱼(Squid)', '青甘鱼(Kingfish)', '黄尾鱼(Yakka)', '多齿蛇鲻(Lizardfish)', '银鲈(Silver Trevally)', '笛鲷(Mangrove Jack)', '尖吻鲈(Barramundi)']
-                      .filter(fish => fish.toLowerCase().includes(fishSearchQuery.toLowerCase()))
-                      .map((fish) => (
-                      <button
-                        key={fish}
-                        onClick={() => {
-                          setSelectedFish(fish);
-                          setFishSearchQuery('');
-                          // Don't close automatically if user wants to switch several, but common UX is to close
-                        }}
-                        className={cn(
-                          "py-2 px-1 text-[9px] font-bold rounded-lg border transition-all text-center leading-tight",
-                          selectedFish === fish 
-                            ? "bg-primary text-white border-primary shadow-md" 
-                            : "bg-white text-text-light border-app-border hover:border-accent hover:text-accent"
-                        )}
-                      >
-                        {fish.split('(')[0]}
-                        {fish.includes('(') && <span className="block opacity-60 font-normal scale-90 mt-0.5">{fish.split('(')[1].replace(')', '')}</span>}
-                      </button>
-                    ))}
+                      .filter(fish => {
+                        const searchLower = fishSearchQuery.toLowerCase();
+                        return fish.toLowerCase().includes(searchLower) || (lang === 'en' && t.fishGeneral.toLowerCase().includes(searchLower));
+                      })
+                      .map((fish) => {
+                        const displayName = fish === '通用' ? t.fishGeneral : fish;
+                        return (
+                          <button
+                            key={fish}
+                            onClick={() => {
+                              setSelectedFish(fish);
+                              setFishSearchQuery('');
+                            }}
+                            className={cn(
+                              "py-2 px-1 text-[9px] font-bold rounded-lg border transition-all text-center leading-tight",
+                              selectedFish === fish 
+                                ? "bg-primary text-white border-primary shadow-md" 
+                                : "bg-white text-text-light border-app-border hover:border-accent hover:text-accent"
+                            )}
+                          >
+                            {displayName.split('(')[0]}
+                            {displayName.includes('(') && <span className="block opacity-60 font-normal scale-90 mt-0.5">{displayName.split('(')[1].replace(')', '')}</span>}
+                          </button>
+                        );
+                      })}
                     {['通用', '真鲷(Snapper)', '黑鲷(Black Bream)', '扁头鱼(Flathead)', '澳洲三文鱼(Australian Salmon)', '鱿鱼(Squid)', '青甘鱼(Kingfish)', '黄尾鱼(Yakka)', '多齿蛇鲻(Lizardfish)', '银鲈(Silver Trevally)', '笛鲷(Mangrove Jack)', '尖吻鲈(Barramundi)']
                       .filter(fish => fish.toLowerCase().includes(fishSearchQuery.toLowerCase())).length === 0 && (
                         <div className="col-span-full py-4 text-center text-[10px] text-text-light opacity-60">
-                          未找到匹配鱼种
+                          {t.noSpecies}
                         </div>
                       )}
                   </div>
@@ -524,7 +557,7 @@ export default function App() {
                       selectedFish === fish ? "bg-accent text-primary border-accent" : "bg-slate-50 text-text-light border-slate-200"
                     )}
                   >
-                    {fish.split('(')[0]}
+                    {fish === '通用' ? t.fishGeneral : fish.split('(')[0]}
                   </button>
                 ))}
                 <button 
@@ -534,7 +567,7 @@ export default function App() {
                   }}
                   className="flex-shrink-0 px-3 py-1 text-[9px] font-bold rounded-full bg-slate-100 text-text-light border border-dashed border-slate-300"
                 >
-                  + 搜索/更多
+                  {t.more}
                 </button>
               </div>
             )}
@@ -555,7 +588,7 @@ export default function App() {
                   !isForecastMode ? "bg-accent text-primary" : "text-white/40 hover:text-white"
                 )}
               >
-                今日实时
+                {t.todayLive}
               </button>
               <button 
                 onClick={toggleForecastMode}
@@ -566,12 +599,12 @@ export default function App() {
                 )}
               >
                 {isForecastLoading ? <RefreshCw size={10} className="animate-spin" /> : <Calendar size={10} />}
-                明日预测
+                {t.tomorrowForecast}
               </button>
             </div>
 
             <div className="mt-8 text-[10px] uppercase tracking-widest font-bold opacity-60 mb-4 md:mb-6">
-              {isForecastMode ? '明日鱼情预测 (Tomorrow Forecast)' : '综合鱼情指数 (Fishing Index)'}
+              {isForecastMode ? `${t.tomorrowForecast} ${t.fishingIndex}` : t.fishingIndex}
             </div>
             
             <div className="relative w-28 h-28 md:w-36 md:h-36 mx-auto mb-4 md:mb-6 flex flex-col items-center justify-center border-8 border-white/10 rounded-full">
@@ -582,9 +615,9 @@ export default function App() {
               <span className="text-xs opacity-60">/ 100</span>
             </div>
             <div className="text-xl font-bold text-accent mb-4">
-              {activeData?.score && activeData.score >= 80 ? (isForecastMode ? '预测：爆护' : '爆护预警：极佳') : 
-               activeData?.score && activeData.score >= 60 ? (isForecastMode ? '预测：良好' : '鱼情：良好') : 
-               activeData?.score && activeData.score >= 40 ? (isForecastMode ? '预测：一般' : '鱼情：一般') : (isForecastMode ? '预测：较差' : '鱼情：较差')}
+              {activeData?.score && activeData.score >= 80 ? (isForecastMode ? t.forecastExcellent : t.scoreDescExcellent) : 
+               activeData?.score && activeData.score >= 60 ? (isForecastMode ? t.forecastGood : t.scoreDescGood) : 
+               activeData?.score && activeData.score >= 40 ? (isForecastMode ? t.forecastFair : t.scoreDescFair) : (isForecastMode ? t.forecastPoor : t.scoreDesc)}
             </div>
             <p className="text-xs leading-relaxed opacity-80 min-h-[3em]">
               {activeData?.summary}
@@ -595,7 +628,7 @@ export default function App() {
               <div className="mt-8 pt-6 border-t border-white/10">
                 <div className="text-[10px] uppercase tracking-widest font-bold opacity-60 mb-4 flex items-center justify-center gap-2">
                   <Clock size={12} />
-                  未来 12 小时鱼情趋势
+                  {t.next12h}
                 </div>
                 <div className="relative h-24 w-full group/trend pt-4 px-2">
                   <svg className="w-full h-full overflow-visible" viewBox="0 0 100 40" preserveAspectRatio="none">
@@ -682,7 +715,7 @@ export default function App() {
           {/* Moon Card */}
           <div className="bg-card-bg border border-app-border rounded-xl p-6 shadow-sm">
             <div className="text-[10px] uppercase tracking-widest font-bold text-text-light mb-4">
-              {isForecastMode ? '明日月相 (Tomorrow Moon)' : '月相数据 (Moon Phase)'}
+              {isForecastMode ? t.tomorrowMoon : t.moonPhase}
             </div>
             <div className="flex items-center gap-4">
               <div className="relative w-12 h-12 rounded-full bg-primary overflow-hidden shadow-inner">
@@ -693,7 +726,7 @@ export default function App() {
               </div>
               <div>
                 <div className="text-lg font-bold">{isForecastMode ? tomorrowMoon?.phaseName : moon?.phaseName}</div>
-                <div className="text-xs text-text-light">照明度: {Math.round(((isForecastMode ? tomorrowMoon?.phase : moon?.phase) || 0) * 100)}%</div>
+                <div className="text-xs text-text-light">{t.illumination}: {Math.round(((isForecastMode ? tomorrowMoon?.phase : moon?.phase) || 0) * 100)}%</div>
               </div>
             </div>
           </div>
@@ -702,10 +735,10 @@ export default function App() {
           <div className="mt-auto bg-amber-50 border border-amber-200 p-5 rounded-xl">
             <div className="text-sm font-bold text-amber-800 mb-2 flex items-center gap-2">
               <Info size={16} />
-              💡 专家研判 (Expert Insight)
+              {t.expertInsight}
             </div>
             <p className="text-xs text-amber-800/80 leading-relaxed">
-              {activeData?.recommendations[0] || "气压上升期间，鱼类活性显著增强。建议尝试深浅交替区。"}
+              {activeData?.recommendations[0] || (lang === 'zh' ? "气压上升期间，鱼类活性显著增强。建议尝试深浅交替区。" : "Fishing activity increases significantly during rising pressure. Try drop-off areas.")}
             </p>
           </div>
         </aside>
@@ -715,7 +748,7 @@ export default function App() {
           {/* Weather Card */}
           <div className="bg-card-bg border border-app-border rounded-xl p-6 shadow-sm">
             {/* Weather Alerts */}
-            {(isForecastMode ? tomorrowWeather : weather) && getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode) && (
+            {(isForecastMode ? tomorrowWeather : weather) && getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang) && (
               <motion.div 
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
@@ -724,11 +757,11 @@ export default function App() {
                 <AlertCircle className="text-red-500 shrink-0" size={18} />
                 <div className="flex-1">
                   <div className="text-[10px] font-bold text-red-800 uppercase flex justify-between">
-                    <span>{getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode)?.title} ({isForecastMode ? '明日预报' : '实时监控'})</span>
-                    <span>代码: {(isForecastMode ? tomorrowWeather : weather)!.weatherCode}</span>
+                    <span>{getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang)?.title} ({isForecastMode ? t.tomorrowForecast : t.todayLive})</span>
+                    <span>{lang === 'zh' ? '代码' : 'Code'}: {(isForecastMode ? tomorrowWeather : weather)!.weatherCode}</span>
                   </div>
                   <p className="text-[11px] text-red-700 font-medium">
-                    {getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode)?.message}
+                    {getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang)?.message}
                   </p>
                 </div>
               </motion.div>
@@ -737,39 +770,39 @@ export default function App() {
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-3">
                 <div className="text-[10px] uppercase tracking-widest font-bold text-text-light">
-                  {isForecastMode ? '明日预报 (Tomorrow Weather)' : '实时天气 (Weather)'}
+                  {isForecastMode ? t.tomorrowWeather : t.weather}
                 </div>
                 {(isForecastMode ? tomorrowWeather : weather) && getWeatherIcon((isForecastMode ? tomorrowWeather : weather)!.weatherCode)}
               </div>
               <div className="flex flex-col items-end">
                 <span className="flex items-center gap-1 text-[10px] font-bold text-success uppercase">
                   <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                  {isForecastMode ? '预报数据' : '适宜垂钓'}
+                  {isForecastMode ? (lang === 'zh' ? '预报数据' : 'FORECAST') : (lang === 'zh' ? '适宜垂钓' : 'OPTIMAL')}
                 </span>
                 {isForecastMode && tomorrowWeather?.precipProb !== undefined && (
-                  <span className="text-[9px] font-bold text-blue-500 mt-0.5">降雨概率: {tomorrowWeather.precipProb}%</span>
+                  <span className="text-[9px] font-bold text-blue-500 mt-0.5">{t.precipProb}: {tomorrowWeather.precipProb}%</span>
                 )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-y-6">
               <div className="space-y-1">
-                <span className="text-[10px] text-text-light uppercase font-bold">温度</span>
+                <span className="text-[10px] text-text-light uppercase font-bold">{t.temp}</span>
                 <div className="text-xl font-bold">{(isForecastMode ? tomorrowWeather : weather)?.temperature}<span className="text-xs ml-0.5 font-normal">°C</span></div>
               </div>
               <div className="space-y-1">
-                <span className="text-[10px] text-text-light uppercase font-bold">气压</span>
+                <span className="text-[10px] text-text-light uppercase font-bold">{t.pressure}</span>
                 <div className="flex items-center gap-1.5">
                   <div className="text-xl font-bold">{(isForecastMode ? tomorrowWeather : weather)?.pressure}<span className="text-xs ml-0.5 font-normal">hPa</span></div>
                   <ArrowUp size={12} className="text-success" strokeWidth={3} />
                 </div>
               </div>
               <div className="space-y-1">
-                <span className="text-[10px] text-text-light uppercase font-bold">风速</span>
+                <span className="text-[10px] text-text-light uppercase font-bold">{t.windSpeed}</span>
                 <div className="flex items-center gap-2">
                   <div className="text-xl font-bold">{(isForecastMode ? tomorrowWeather : weather)?.windSpeed}<span className="text-xs ml-0.5 font-normal">km/h</span></div>
                   <div 
                     className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded border border-amber-100"
-                    title={`风向: ${(isForecastMode ? tomorrowWeather : weather)?.windDirection}°`}
+                    title={`${lang === 'zh' ? '风向' : 'Wind'}: ${(isForecastMode ? tomorrowWeather : weather)?.windDirection}°`}
                   >
                     <motion.div
                       animate={{ rotate: (isForecastMode ? tomorrowWeather : weather)?.windDirection || 0 }}
@@ -777,12 +810,12 @@ export default function App() {
                     >
                       <ArrowUp size={12} strokeWidth={3} />
                     </motion.div>
-                    <span className="text-[10px] font-bold">{getWindDirectionLabel((isForecastMode ? tomorrowWeather : weather)?.windDirection || 0)}</span>
+                    <span className="text-[10px] font-bold">{getWindDirectionLabel((isForecastMode ? tomorrowWeather : weather)?.windDirection || 0, lang)}</span>
                   </div>
                 </div>
               </div>
               <div className="space-y-1">
-                <span className="text-[10px] text-text-light uppercase font-bold">湿度</span>
+                <span className="text-[10px] text-text-light uppercase font-bold">{t.humidity}</span>
                 <div className="flex items-center gap-1.5">
                   <div className="text-xl font-bold">{(isForecastMode ? tomorrowWeather : weather)?.humidity}<span className="text-xs ml-0.5 font-normal">%</span></div>
                   <ArrowDown size={12} className="text-blue-400" strokeWidth={3} />
@@ -793,7 +826,7 @@ export default function App() {
             {/* Hourly Forecast */}
             <div className="mt-8 pt-6 border-t border-app-border">
               <div className="text-[10px] uppercase font-bold text-text-light mb-4 flex justify-between items-center">
-                <span>{isForecastMode ? '明日逐小时预报' : '逐小时预报 (Next 12h)'}</span>
+                <span>{isForecastMode ? t.tomorrowHourly : t.hourlyForecast}</span>
                 <Clock size={12} />
               </div>
               <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
@@ -848,31 +881,31 @@ export default function App() {
             {/* Solunar Bite Times - Filling the gap */}
             <div className="mt-8 pt-6 border-t border-app-border">
               <div className="text-[10px] uppercase font-bold text-text-light mb-4 flex justify-between items-center">
-                <span>{isForecastMode ? '明日最佳咬钩时段' : '最佳咬钩时段 (Bite Times)'}</span>
+                <span>{isForecastMode ? (lang === 'zh' ? '明日最佳咬钩时段' : 'Tomorrow Bite Times') : t.biteTimes}</span>
                 <Zap size={12} className="text-accent" />
               </div>
               
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 bg-accent/5 rounded-xl border border-accent/10 flex flex-col gap-1">
-                  <span className="text-[8px] font-bold text-accent uppercase tracking-tighter">主要活跃期 I</span>
+                  <span className="text-[8px] font-bold text-accent uppercase tracking-tighter">{t.majorPeriod} I</span>
                   <span className="text-sm font-black text-primary">05:45 - 07:45</span>
                   <div className="w-full h-1 bg-slate-100 rounded-full mt-1 overflow-hidden">
                     <div className="h-full bg-accent w-[90%]" />
                   </div>
                 </div>
                 <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 flex flex-col gap-1">
-                  <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-tighter">主要活跃期 II</span>
+                  <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-tighter">{t.majorPeriod} II</span>
                   <span className="text-sm font-black text-primary">18:15 - 20:15</span>
                   <div className="w-full h-1 bg-slate-100 rounded-full mt-1 overflow-hidden">
                     <div className="h-full bg-emerald-500 w-[85%]" />
                   </div>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-col gap-1">
-                  <span className="text-[8px] font-bold text-text-light uppercase tracking-tighter">次要活跃期 I</span>
+                  <span className="text-[8px] font-bold text-text-light uppercase tracking-tighter">{t.minorPeriod} I</span>
                   <span className="text-sm font-bold text-primary opacity-80">11:30 - 12:30</span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-col gap-1">
-                  <span className="text-[8px] font-bold text-text-light uppercase tracking-tighter">次要活跃期 II</span>
+                  <span className="text-[8px] font-bold text-text-light uppercase tracking-tighter">{t.minorPeriod} II</span>
                   <span className="text-sm font-bold text-primary opacity-80">23:50 - 00:50</span>
                 </div>
               </div>
@@ -880,9 +913,9 @@ export default function App() {
               <div className="mt-4 p-3 bg-slate-800 rounded-lg flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Star size={14} className="text-accent fill-accent" />
-                  <span className="text-[10px] font-bold text-white uppercase italic">黄金窗口期</span>
+                  <span className="text-[10px] font-bold text-white uppercase italic">{t.goldenWindow}</span>
                 </div>
-                <span className="text-[10px] font-medium text-white/70">日落前 1 小时 + 满潮</span>
+                <span className="text-[10px] font-medium text-white/70">{t.sunsetTide}</span>
               </div>
             </div>
           </div>
@@ -891,21 +924,21 @@ export default function App() {
           <div className="bg-card-bg border border-app-border rounded-xl p-6 shadow-sm flex flex-col">
             <div className="flex justify-between items-center mb-6">
               <div className="text-[10px] uppercase tracking-widest font-bold text-text-light">
-                {isForecastMode ? '明日潮汐 (Tomorrow Tide)' : '潮汐实时站 (Tide Station)'}
+                {isForecastMode ? t.tomorrowTide : t.tideStation}
               </div>
               <div className={cn(
                 "px-2 py-0.5 rounded text-[9px] font-bold uppercase flex items-center gap-1",
                 (isForecastMode ? tomorrowTide : tide)?.state === 'rising' ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"
               )}>
                 {(isForecastMode ? tomorrowTide : tide)?.state === 'rising' ? <ArrowUp size={10} /> : <ArrowDown size={10} />}
-                {(isForecastMode ? tomorrowTide : tide)?.state === 'rising' ? '涨潮中' : '退潮中'}
+                {(isForecastMode ? tomorrowTide : tide)?.state === 'rising' ? t.rising : t.falling}
               </div>
             </div>
 
             <div className="flex items-end gap-4 mb-8">
               <div className="text-4xl font-black text-primary flex items-baseline gap-1">
                 {(isForecastMode ? tomorrowTide : tide)?.height}
-                <span className="text-sm font-medium text-text-light">m</span>
+                <span className="text-sm font-medium text-text-light">{t.tideUnits}</span>
               </div>
               <div className="flex-1 pb-1">
                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
@@ -916,8 +949,8 @@ export default function App() {
                   />
                 </div>
                 <div className="flex justify-between mt-1.5 text-[9px] font-bold text-text-light/50 uppercase">
-                  <span>干潮</span>
-                  <span>满潮</span>
+                  <span>{t.lowTide}</span>
+                  <span>{t.highTide}</span>
                 </div>
               </div>
             </div>
@@ -926,7 +959,7 @@ export default function App() {
               <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
                 <div className="text-[9px] font-bold text-text-light uppercase mb-1 flex items-center gap-1">
                   <ChevronUp size={10} className="text-emerald-500" />
-                  近期高潮
+                  {t.recentHigh}
                 </div>
                 <div className="text-sm font-black text-primary">
                   {(isForecastMode ? tomorrowTide : tide)?.nextHighTide.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -935,7 +968,7 @@ export default function App() {
               <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
                 <div className="text-[9px] font-bold text-text-light uppercase mb-1 flex items-center gap-1">
                   <ChevronDown size={10} className="text-blue-500" />
-                  近期低潮
+                  {t.recentLow}
                 </div>
                 <div className="text-sm font-black text-primary">
                   {(isForecastMode ? tomorrowTide : tide)?.nextLowTide.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1009,21 +1042,21 @@ export default function App() {
           {/* Recommendations Card */}
           <div className="bg-card-bg border border-app-border rounded-xl p-4 md:p-6 shadow-sm md:col-span-2">
             <div className="text-[10px] uppercase tracking-widest font-bold text-text-light mb-4 md:mb-6 flex justify-between items-center">
-              <span>{isForecastMode ? '明日目标鱼种建议 (Tomorrow Target)' : '目标鱼种建议 (Target Species)'}</span>
-              <span className="text-accent font-black">[{selectedFish}]</span>
+              <span>{isForecastMode ? t.tomorrowRecs : t.recommendations}</span>
+              <span className="text-accent font-black">[{selectedFish === '通用' ? t.fishGeneral : selectedFish}]</span>
             </div>
             <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start md:items-center">
               <div className="w-full md:flex-1 space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="text-xl font-bold text-primary">建议深度: {activeData?.targetDepth}</div>
+                  <div className="text-xl font-bold text-primary">{t.suggestedDepth}: {activeData?.targetDepth}</div>
                   <div className="group relative">
                     <Info size={14} className="text-text-light cursor-help" />
                     <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-primary text-white text-[10px] rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 leading-relaxed">
-                      根据当前气压和光照强度计算。气压高时鱼类通常在深水区，气压低或阴天时可能在浅水区觅食。
+                      {lang === 'zh' ? '根据当前气压和光照强度计算。气压高时鱼类通常在深水区，气压低或阴天时可能在浅水区觅食。' : 'Calculated based on pressure and light. High pressure shifts fish deeper, while low pressure or clouds bring them shallower.'}
                     </div>
                   </div>
                 </div>
-                <div className="text-xs font-bold text-text-light uppercase tracking-tight">活跃时段: {activeData?.bestTime}</div>
+                <div className="text-xs font-bold text-text-light uppercase tracking-tight">{t.activeTime}: {activeData?.bestTime}</div>
                 <p className="text-sm text-text-dark leading-relaxed">
                   {activeData?.recommendations[1]} {activeData?.recommendations[2]}
                 </p>
@@ -1031,20 +1064,20 @@ export default function App() {
               <div className="w-full md:flex-1 space-y-3 border-t md:border-t-0 md:border-l border-app-border pt-6 md:pt-0 md:pl-8">
                 <div className="flex flex-col space-y-4">
                   <div className="flex items-center justify-between">
-                    <div className="text-xl font-bold text-primary">建议饵料: {activeData?.baitSuggestion}</div>
+                    <div className="text-xl font-bold text-primary">{t.baitSuggestion}: {activeData?.baitSuggestion}</div>
                     <div className="group relative">
                       <Info size={14} className="text-text-light cursor-help" />
                       <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-primary text-white text-[10px] rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 leading-relaxed">
-                        基于当前水温和季节推荐。冷水期建议使用活饵或慢速假饵，暖水期可尝试快速运动的亮片或米诺。
+                        {lang === 'zh' ? '基于当前水温和季节推荐。冷水期建议使用活饵或慢速假饵，暖水期可尝试快速运动的亮片或米诺。' : 'Based on temp and season. Use lures with slow action in cold water; faster retrieval or reactive baits in warm water.'}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center justify-between border-t border-app-border pt-4">
-                    <div className="text-xl font-bold text-accent">专业钓法: {activeData?.techniqueSuggestion}</div>
+                    <div className="text-xl font-bold text-accent">{t.technique}: {activeData?.techniqueSuggestion}</div>
                     <div className="group relative">
                       <ShieldCheck size={14} className="text-text-light cursor-help" />
                       <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 leading-relaxed">
-                        根据当前潮汐阶段和风速推荐的针对性操作手法。
+                        {lang === 'zh' ? '根据当前潮汐阶段和风速推荐的针对性操作手法。' : 'Specific techniques recommended based on current tide phase and wind conditions.'}
                       </div>
                     </div>
                   </div>
@@ -1063,7 +1096,7 @@ export default function App() {
               onClick={() => setIsGearModalOpen(true)}
               className="mt-8 w-full bg-primary text-white py-3 rounded-lg font-bold hover:bg-primary/90 transition-all shadow-md active:scale-[0.98]"
             >
-              查看详细装备建议
+              {t.gearAdvice}
             </button>
           </div>
         </div>
@@ -1092,9 +1125,9 @@ export default function App() {
                 <div>
                   <h2 className="text-xl font-bold flex items-center gap-2">
                     <ShieldCheck size={24} className="text-accent" />
-                    专业装备建议清单
+                    {t.gearModal.title}
                   </h2>
-                  <p className="text-xs opacity-70 mt-1">基于当前 {activeData?.targetDepth} 环境分析生成</p>
+                  <p className="text-xs opacity-70 mt-1">{t.gearModal.subtitle} ({activeData?.targetDepth})</p>
                 </div>
                 <button 
                   onClick={() => setIsGearModalOpen(false)}
@@ -1109,26 +1142,26 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Rod & Reel */}
                   <div className="space-y-4">
-                    <h3 className="text-sm font-bold text-primary border-l-4 border-accent pl-2 uppercase tracking-wider">鱼竿与卷线器</h3>
+                    <h3 className="text-sm font-bold text-primary border-l-4 border-accent pl-2 uppercase tracking-wider">{t.gearModal.sections.rodReel}</h3>
                     <div className="space-y-3">
                       <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 group relative cursor-help">
                         <p className="text-[10px] text-text-light font-bold uppercase flex justify-between">
-                          鱼竿 (Rod)
+                          {t.gearModal.labels.rod}
                           <Info size={10} />
                         </p>
-                        <p className="text-sm font-medium">2.4m - 2.7m M/MH 调性碳素路亚竿</p>
+                        <p className="text-sm font-medium">{lang === 'zh' ? '2.4m - 2.7m M/MH 调性碳素路亚竿' : '2.4m - 2.7m M/MH Fast Action Carbon Rod'}</p>
                         <div className="absolute inset-0 bg-primary/95 text-white p-3 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center leading-relaxed">
-                          M/MH 调性提供足够的腰力来应对当前水流，碳素材质保证了感度，能清晰感知轻微咬钩。
+                          {lang === 'zh' ? 'M/MH 调性提供足够的腰力来应对当前水流，碳素材质保证了感度，能清晰感知轻微咬钩。' : 'M/MH action provides power for currents; carbon material ensures sensitivity to detect subtle bites.'}
                         </div>
                       </div>
                       <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 group relative cursor-help">
                         <p className="text-[10px] text-text-light font-bold uppercase flex justify-between">
-                          卷线器 (Reel)
+                          {t.gearModal.labels.reel}
                           <Info size={10} />
                         </p>
-                        <p className="text-sm font-medium">2500 - 3000 型纺车轮 (高速比建议)</p>
+                        <p className="text-sm font-medium">{lang === 'zh' ? '2500 - 3000 型纺车轮 (高速比建议)' : '2500 - 3000 Series Spinning Reel (High Speed)'}</p>
                         <div className="absolute inset-0 bg-primary/95 text-white p-3 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center leading-relaxed">
-                          高速比卷线器有助于在复杂水域快速收线，防止挂底，3000型容量足以应对突发的大鱼冲击。
+                          {lang === 'zh' ? '高速比卷线器有助于在复杂水域快速收线，防止挂底，3000型容量足以应对突发的大鱼冲击。' : 'High gear ratio helps retrieve quickly to avoid snags. 3000 size handles unexpected big fish strikes.'}
                         </div>
                       </div>
                     </div>
@@ -1136,26 +1169,26 @@ export default function App() {
 
                   {/* Line & Hook */}
                   <div className="space-y-4">
-                    <h3 className="text-sm font-bold text-primary border-l-4 border-accent pl-2 uppercase tracking-wider">线组与鱼钩</h3>
+                    <h3 className="text-sm font-bold text-primary border-l-4 border-accent pl-2 uppercase tracking-wider">{t.gearModal.sections.lineLeader}</h3>
                     <div className="space-y-3">
                       <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 group relative cursor-help">
                         <p className="text-[10px] text-text-light font-bold uppercase flex justify-between">
-                          主线 (Main Line)
+                          {t.gearModal.labels.line}
                           <Info size={10} />
                         </p>
-                        <p className="text-sm font-medium">1.2# - 1.5# 高强度 PE 线 (8编)</p>
+                        <p className="text-sm font-medium">{lang === 'zh' ? '1.2# - 1.5# 高强度 PE 线 (8编)' : '15-20lb Braided Line (PE 1.2-1.5)'}</p>
                         <div className="absolute inset-0 bg-primary/95 text-white p-3 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center leading-relaxed">
-                          PE线零延展性提供极佳传导，8编工艺更圆滑，能有效增加抛投距离并降低风阻。
+                          {lang === 'zh' ? 'PE线零延展性提供极佳传导，8编工艺更圆滑，能有效增加抛投距离并降低风阻。' : 'Braid provides zero stretch for sensitivity. 8-strand weaving increases casting distance and reduces wind drag.'}
                         </div>
                       </div>
                       <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 group relative cursor-help">
                         <p className="text-[10px] text-text-light font-bold uppercase flex justify-between">
-                          前导线 (Leader)
+                          {t.gearModal.labels.leader}
                           <Info size={10} />
                         </p>
-                        <p className="text-sm font-medium">3.0# - 4.0# 碳素前导线 (约 1.5m)</p>
+                        <p className="text-sm font-medium">{lang === 'zh' ? '3.0# - 4.0# 碳素前导线 (约 1.5m)' : '12-16lb Fluorocarbon Leader (1.5m)'}</p>
                         <div className="absolute inset-0 bg-primary/95 text-white p-3 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center leading-relaxed">
-                          碳素线耐磨性强，且在水中几乎透明，能防止主线被礁石磨断并降低鱼的警觉性。
+                          {lang === 'zh' ? '碳素线耐磨性强，且在水中几乎透明，能防止主线被礁石磨断并降低鱼的警觉性。' : 'Fluoro is abrasion-resistant and invisible underwater, preventing cut-offs on rocks and spooking fish.'}
                         </div>
                       </div>
                     </div>
@@ -1163,26 +1196,26 @@ export default function App() {
 
                   {/* Float & Sinker */}
                   <div className="space-y-4">
-                    <h3 className="text-sm font-bold text-primary border-l-4 border-accent pl-2 uppercase tracking-wider">浮漂与配件</h3>
+                    <h3 className="text-sm font-bold text-primary border-l-4 border-accent pl-2 uppercase tracking-wider">{t.gearModal.sections.lureBait}</h3>
                     <div className="space-y-3">
                       <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 group relative cursor-help">
                         <p className="text-[10px] text-text-light font-bold uppercase flex justify-between">
-                          浮漂/假饵 (Lure/Float)
+                          {t.gearModal.labels.lure}
                           <Info size={10} />
                         </p>
-                        <p className="text-sm font-medium">{activeData?.baitSuggestion === '通用饵料' ? '10g-15g 沉水米诺或亮片' : activeData?.baitSuggestion}</p>
+                        <p className="text-sm font-medium">{activeData?.baitSuggestion === '通用' || activeData?.baitSuggestion === 'General' ? (lang === 'zh' ? '10g-15g 沉水米诺或亮片' : '10g-15g Sinking Minnow or Spoon') : activeData?.baitSuggestion}</p>
                         <div className="absolute inset-0 bg-primary/95 text-white p-3 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center leading-relaxed">
-                          根据当前水深推荐。沉水米诺能快速到达目标泳层，亮片则在光照充足时提供强烈的反光诱惑。
+                          {lang === 'zh' ? '根据当前水深推荐。沉水米诺能快速到达目标泳层，亮片则在光照充足时提供强烈的反光诱惑。' : 'Recommended based on depth. Sinking minnows reach the strike zone fast; spoons provide flash in high light.'}
                         </div>
                       </div>
                       <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 group relative cursor-help">
                         <p className="text-[10px] text-text-light font-bold uppercase flex justify-between">
-                          铅坠/别针 (Sinker/Snap)
+                          {t.gearModal.labels.tackle}
                           <Info size={10} />
                         </p>
-                        <p className="text-sm font-medium">#00 增强型加固别针 + 5g 快速子弹铅</p>
+                        <p className="text-sm font-medium">{lang === 'zh' ? '#00 增强型加固别针 + 5g 快速子弹铅' : '#00 Power Snap + 5g Bullet Sinkers'}</p>
                         <div className="absolute inset-0 bg-primary/95 text-white p-3 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center leading-relaxed">
-                          加固别针防止大鱼拉开，子弹铅能增加抛投稳定性，并帮助假饵在强风中快速切入水面。
+                          {lang === 'zh' ? '加固别针防止大鱼拉开，子弹铅能增加抛投稳定性，并帮助假饵在强风中快速切入水面。' : 'Heavy-duty snaps prevent forced opens. Bullet sinkers increase stability and help lures cut through wind.'}
                         </div>
                       </div>
                     </div>
@@ -1190,26 +1223,26 @@ export default function App() {
 
                   {/* Safety & Others */}
                   <div className="space-y-4">
-                    <h3 className="text-sm font-bold text-primary border-l-4 border-accent pl-2 uppercase tracking-wider">安全与辅助</h3>
+                    <h3 className="text-sm font-bold text-primary border-l-4 border-accent pl-2 uppercase tracking-wider">{t.gearModal.sections.terminal}</h3>
                     <div className="space-y-3">
                       <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 group relative cursor-help">
                         <p className="text-[10px] text-text-light font-bold uppercase flex justify-between">
-                          防护装备
+                          {lang === 'zh' ? '防护装备' : 'Protection'}
                           <Info size={10} />
                         </p>
-                        <p className="text-sm font-medium">偏光太阳镜 + 防滑钓鱼鞋 (必备)</p>
+                        <p className="text-sm font-medium">{lang === 'zh' ? '偏光太阳镜 + 防滑钓鱼鞋 (必备)' : 'Polarized Glasses + Non-Slip Shoes'}</p>
                         <div className="absolute inset-0 bg-primary/95 text-white p-3 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center leading-relaxed">
-                          偏光镜能消除水面反光，看清鱼情；防滑鞋在湿滑的岸边或礁石上是生命安全的保障。
+                          {lang === 'zh' ? '偏光镜能消除水面反光，看清鱼情；防滑鞋在湿滑的岸边或礁石上是生命安全的保障。' : 'Polarized lenses eliminate surface glare; non-slip shoes are essential for safety on wet rocks or banks.'}
                         </div>
                       </div>
                       <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 group relative cursor-help">
                         <p className="text-[10px] text-text-light font-bold uppercase flex justify-between">
-                          辅助工具
+                          {lang === 'zh' ? '辅助工具' : 'Accessories'}
                           <Info size={10} />
                         </p>
-                        <p className="text-sm font-medium">控鱼器 + 剪线钳 + 简易急救包</p>
+                        <p className="text-sm font-medium">{lang === 'zh' ? '控鱼器 + 剪线钳 + 简易急救包' : 'Fish Grips + Line Cutters + First Aid Kit'}</p>
                         <div className="absolute inset-0 bg-primary/95 text-white p-3 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center leading-relaxed">
-                          控鱼器能安全摘钩防止被鱼鳍刺伤，剪线钳和急救包是户外垂钓的标配工具。
+                          {lang === 'zh' ? '控鱼器能安全摘钩防止被鱼鳍刺伤，剪线钳和急救包是户外垂钓的标配工具。' : 'Grips allow safe hook removal. Cutters and first aid are standard requirements for outdoor fishing.'}
                         </div>
                       </div>
                     </div>
@@ -1219,7 +1252,9 @@ export default function App() {
                 <div className="p-4 bg-success/10 border border-success/20 rounded-xl flex gap-3">
                   <ShieldCheck size={20} className="text-success flex-shrink-0" />
                   <p className="text-xs text-success font-medium leading-relaxed">
-                    专家提示：当前的 {(isForecastMode ? tomorrowWeather : weather)?.windSpeed}km/h 风速可能会影响抛投精准度，建议适当增加配重或选择顺风位作钓。
+                    {lang === 'zh' 
+                      ? `专家提示：当前的 ${(isForecastMode ? tomorrowWeather : weather)?.windSpeed}km/h 风速可能会影响抛投精准度，建议适当增加配重或选择顺风位作钓。`
+                      : `Expert Tip: The current ${(isForecastMode ? tomorrowWeather : weather)?.windSpeed}km/h wind may affect casting accuracy. Consider adding weight or casting with the wind.`}
                   </p>
                 </div>
               </div>
