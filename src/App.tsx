@@ -74,8 +74,9 @@ const getWeatherLabel = (code: number, lang: Language) => {
   return labels.sunny;
 };
 
-const getWeatherAlert = (code: number, lang: Language) => {
+const getWeatherAlert = (code: number, windSpeed: number, lang: Language) => {
   const alerts = i18n[lang].weatherAlerts;
+  if (windSpeed > 40) return alerts.wind;
   if (code >= 95) return alerts.thunderstorm;
   if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return alerts.snow;
   if (code >= 61 && code <= 67 || (code >= 80 && code <= 82)) return alerts.rain;
@@ -650,7 +651,11 @@ export default function App() {
         {/* Sidebar */}
         <aside className="space-y-6 flex flex-col">
           {/* Weather Alert Banner */}
-          {(isForecastMode ? tomorrowWeather : weather) && getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang) && (
+          {(isForecastMode ? tomorrowWeather : weather) && getWeatherAlert(
+            (isForecastMode ? tomorrowWeather : weather)!.weatherCode, 
+            (isForecastMode ? tomorrowWeather : weather)!.windSpeed, 
+            lang
+          ) && (
             <motion.div 
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -659,11 +664,19 @@ export default function App() {
               <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
               <div>
                 <div className="text-sm font-bold text-red-800">
-                  {getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang)?.title}
+                  {getWeatherAlert(
+                    (isForecastMode ? tomorrowWeather : weather)!.weatherCode, 
+                    (isForecastMode ? tomorrowWeather : weather)!.windSpeed, 
+                    lang
+                  )?.title}
                   {isForecastMode && <span className="ml-2 text-[10px] font-normal opacity-70">({t.tomorrowForecast})</span>}
                 </div>
                 <p className="text-xs text-red-700 leading-relaxed mt-1">
-                  {getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang)?.message}
+                  {getWeatherAlert(
+                    (isForecastMode ? tomorrowWeather : weather)!.weatherCode, 
+                    (isForecastMode ? tomorrowWeather : weather)!.windSpeed, 
+                    lang
+                  )?.message}
                 </p>
               </div>
             </motion.div>
@@ -955,7 +968,11 @@ export default function App() {
           {/* Weather Card */}
           <div className="bg-card-bg border border-app-border rounded-xl p-6 shadow-sm">
             {/* Weather Alerts */}
-            {(isForecastMode ? tomorrowWeather : weather) && getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang) && (
+            {(isForecastMode ? tomorrowWeather : weather) && getWeatherAlert(
+              (isForecastMode ? tomorrowWeather : weather)!.weatherCode, 
+              (isForecastMode ? tomorrowWeather : weather)!.windSpeed, 
+              lang
+            ) && (
               <motion.div 
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
@@ -964,11 +981,19 @@ export default function App() {
                 <AlertCircle className="text-red-500 shrink-0" size={18} />
                 <div className="flex-1">
                   <div className="text-[10px] font-bold text-red-800 uppercase flex justify-between">
-                    <span>{getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang)?.title} ({isForecastMode ? t.tomorrowForecast : t.todayLive})</span>
+                    <span>{getWeatherAlert(
+                      (isForecastMode ? tomorrowWeather : weather)!.weatherCode, 
+                      (isForecastMode ? tomorrowWeather : weather)!.windSpeed, 
+                      lang
+                    )?.title} ({isForecastMode ? t.tomorrowForecast : t.todayLive})</span>
                     <span>{lang === 'zh' ? '代码' : 'Code'}: {(isForecastMode ? tomorrowWeather : weather)!.weatherCode}</span>
                   </div>
                   <p className="text-[11px] text-red-700 font-medium">
-                    {getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang)?.message}
+                    {getWeatherAlert(
+                      (isForecastMode ? tomorrowWeather : weather)!.weatherCode, 
+                      (isForecastMode ? tomorrowWeather : weather)!.windSpeed, 
+                      lang
+                    )?.message}
                   </p>
                 </div>
               </motion.div>

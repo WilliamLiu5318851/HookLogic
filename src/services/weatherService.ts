@@ -153,39 +153,12 @@ export function getMoonData(date: Date): MoonData {
  * Geocode a location name to coordinates using Google Maps grounding via Gemini
  */
 export async function geocodeLocation(query: string): Promise<{ lat: number; lon: number; name: string; country?: string; admin1?: string }[]> {
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Find the precise coordinates (latitude and longitude), city/suburb, and country for: "${query}". 
-      Please prioritize results in Australia.
-      Return only a JSON array of objects: [{"lat": number, "lon": number, "name": string, "country": string, "admin1": string}]. 
-      Do not include any conversational text, only the JSON.`,
-      config: {
-        tools: [{ googleMaps: {} }],
-        // Note: responseMimeType and responseSchema are NOT supported when using the googleMaps tool.
-      }
-    });
-
-    const text = response.text || "[]";
-    // Extract JSON array from potential markdown blocks or extra text
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    const results = JSON.parse(jsonMatch ? jsonMatch[0] : text);
-    
-    if (Array.isArray(results) && results.length > 0) {
-      // Filter for Australia if possible, or just return as is but prompt prioritized it
-      return results;
-    }
-  } catch (error) {
-    console.error('Google Maps Grounding error:', error);
-  }
-
-  // First, try Nominatim (OpenStreetMap) as a strong fallback, restricted to Australia
+  // First, always try Nominatim (OpenStreetMap) as it's free and fast, restricted to Australia
   const osmUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5&accept-language=zh,en&countrycodes=au`;
   
   try {
     const response = await fetch(osmUrl, {
       headers: {
-        // MUST NOT contain non-ISO-8859-1 characters (like Chinese) in headers
         'User-Agent': 'FishingForecastApp/1.0'
       }
     });
@@ -206,11 +179,35 @@ export async function geocodeLocation(query: string): Promise<{ lat: number; lon
     console.error('OSM Geocoding error:', error);
   }
 
+  // Fallback to Gemini only if OSM fails - to save quota
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Find the precise coordinates (latitude and longitude), city/suburb, and country for: "${query}". 
+      Please prioritize results in Australia.
+      Return only a JSON array of objects: [{"lat": number, "lon": number, "name": string, "country": string, "admin1": string}]. 
+      Do not include any conversational text, only the JSON.`,
+      config: {
+        tools: [{ googleMaps: {} }],
+      }
+    });
+
+    const text = response.text || "[]";
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    const results = JSON.parse(jsonMatch ? jsonMatch[0] : text);
+    
+    if (Array.isArray(results) && results.length > 0) {
+      return results;
+    }
+  } catch (error) {
+    console.error('Google Maps Grounding error:', error);
+  }
+
   // Fallback to Open-Meteo for broader city-level search
-  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=zh&format=json`;
+  const openMeteoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=zh&format=json`;
   
   try {
-    const response = await fetch(url);
+    const response = await fetch(openMeteoUrl);
     const data = await response.json();
     
     if (data.results && data.results.length > 0) {

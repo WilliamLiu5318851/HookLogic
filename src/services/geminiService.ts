@@ -50,63 +50,24 @@ export async function analyzeFishingConditions(
   isForecast: boolean = false,
   language: 'zh' | 'en' = 'zh'
 ): Promise<FishingAnalysis> {
-  const currentHour = new Date().getHours();
-  const next12Hours = hourlyWeather.slice(0, 12).map(h => ({
-    time: h.time.split('T')[1].substring(0, 5),
-    temp: h.temperature,
-    wind: h.windSpeed,
-    precip: h.precipitationProbability
-  }));
-
-  const langInstruction = language === 'en' 
-    ? 'IMPORTANT: You MUST provide the entire analysis (summary, recommendations, bestTime, etc.) strictly in ENGLISH. Do NOT include any Chinese characters in the JSON values.' 
-    : '请完全使用中文进行分析。不要在输出值中包含任何英文。';
-
-  const prompt = `
-    ${isForecast ? '【预测模式：分析明日/未来鱼情】' : '【实时模式：分析当前鱼情】'}
-    ${langInstruction}
-    当前位置: ${location.city || '未知'} (纬度: ${location.latitude}, 经度: ${location.longitude})
-    实时气象: 温度 ${weather.temperature}°C, 气压 ${weather.pressure} hPa, 风速 ${weather.windSpeed} km/h, 风向 ${weather.windDirection}°, 天气 ${weather.condition}
-    潮汐数据: 状态 ${tide.state}, 潮汐进度 ${Math.round(tide.tideProgress * 100)}%
-    月相数据: ${moon.phaseName} (Phase Percentage: ${Math.round(moon.phase * 100)}%)
-    
-    未来12小时天气预报:
-    ${JSON.stringify(next12Hours)}
-    
-    请根据以上数据，一次性生成“通用”以及以下鱼种的深度定制分析（JSON key 必须保持不变）：
-    “真鲷(Snapper)”、“黑鲷(Black Bream)”、“扁头鱼(Flathead)”、“澳洲三文鱼(Australian Salmon)”、“鱿鱼(Squid)”、“青甘鱼(Kingfish)”、“黄尾鱼(Yakka)”、“多齿蛇鲻(Lizardfish)”、“银鲈(Silver Trevally)”、“笛鲷(Mangrove Jack)”、“尖吻鲈(Barramundi)”。
-  `;
-
   try {
-    const result = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [SYSTEM_PROMPT, prompt],
-      config: { responseMimeType: "application/json" }
+    const response = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location,
+        weather,
+        tide,
+        moon,
+        hourlyForecast: hourlyWeather,
+        isForecast,
+        language
+      })
     });
-    const aiText = result.text;
-    const parsed = JSON.parse(aiText) as FishingAnalysis;
-    
-    // Force hourlyTrends times to match source weather forecast times for consistency
-    if (parsed.hourlyTrends && next12Hours.length > 0) {
-      parsed.hourlyTrends = parsed.hourlyTrends.slice(0, next12Hours.length).map((item, idx) => ({
-        ...item,
-        time: next12Hours[idx].time
-      }));
-    }
-    
-    // Do the same for species analysis
-    if (parsed.speciesAnalysis) {
-      Object.keys(parsed.speciesAnalysis).forEach(species => {
-        const sa = parsed.speciesAnalysis[species];
-        if (sa.hourlyTrends && next12Hours.length > 0) {
-          sa.hourlyTrends = sa.hourlyTrends.slice(0, next12Hours.length).map((item, idx) => ({
-            ...item,
-            time: next12Hours[idx].time
-          }));
-        }
-      });
-    }
 
+    if (!response.ok) throw new Error('Backend analysis failed');
+    
+    const parsed = await response.json();
     return parsed;
   } catch (error) {
     console.error("AI Analysis failed:", error);
