@@ -100,7 +100,7 @@ export default function App() {
   const [tomorrowTide, setTomorrowTide] = useState<TideData | null>(null);
   const [tomorrowMoon, setTomorrowMoon] = useState<MoonData | null>(null);
   const [isForecastMode, setIsForecastMode] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [isForecastLoading, setIsForecastLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isGearModalOpen, setIsGearModalOpen] = useState(false);
@@ -262,7 +262,7 @@ export default function App() {
   }, [lang]);
 
   useEffect(() => {
-    initData();
+    // No auto-init. Let user land first.
   }, []);
 
   // Removed useEffect for selectedFish to prevent slow reloading.
@@ -293,18 +293,206 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-app-bg flex flex-col items-center justify-center text-primary p-6">
-        <motion.div 
-          animate={{ rotate: 360 }}
-          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-          className="mb-4"
-        >
-          <RefreshCw size={48} className="text-accent" />
-        </motion.div>
-        <h2 className="text-2xl font-bold mb-2">{t.loadingAnalysis}</h2>
-        <p className="text-text-light text-center max-w-xs">
-          {t.loadingDescription}
-        </p>
+      <div className="min-h-screen bg-primary flex flex-col items-center justify-center text-white p-6 overflow-hidden relative">
+        {/* Animated background waves */}
+        <div className="absolute inset-0 opacity-10">
+          <motion.div
+            animate={{ 
+              x: [0, -20, 0],
+              y: [0, 10, 0]
+            }}
+            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -top-20 -left-20 w-[600px] h-[600px] rounded-full bg-accent blur-[120px]"
+          />
+          <motion.div
+            animate={{ 
+              x: [0, 30, 0],
+              y: [0, -20, 0]
+            }}
+            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -bottom-40 -right-20 w-[500px] h-[500px] rounded-full bg-blue-400 blur-[100px]"
+          />
+        </div>
+
+        <div className="relative z-10 flex flex-col items-center">
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.1, 1],
+              rotate: [0, 5, -5, 0]
+            }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+            className="mb-8"
+          >
+            <div className="w-24 h-24 rounded-full bg-white/10 flex items-center justify-center border border-white/20 shadow-2xl backdrop-blur-md">
+              <Fish size={48} className="text-accent" />
+            </div>
+          </motion.div>
+
+          <h2 className="text-3xl font-black mb-4 tracking-tight text-center uppercase">
+            {t.loadingAnalysis}
+          </h2>
+          
+          <div className="w-64 h-1 bg-white/10 rounded-full mb-6 overflow-hidden relative">
+            <motion.div 
+              initial={{ x: "-100%" }}
+              animate={{ x: "100%" }}
+              transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+              className="absolute inset-0 bg-accent w-1/3 rounded-full"
+            />
+          </div>
+
+          <p className="text-white/60 text-center max-w-sm text-sm leading-relaxed font-medium">
+            {t.loadingDescription}
+          </p>
+
+          <div className="mt-12 flex flex-col gap-3">
+            {[
+              { icon: <Cloud size={14} />, text: lang === 'zh' ? '正在连接气象卫星...' : 'Connecting to weather satellites...' },
+              { icon: <Waves size={14} />, text: lang === 'zh' ? '正在获取实时潮汐状态...' : 'Fetching live tide states...' },
+              { icon: <Zap size={14} />, text: lang === 'zh' ? 'AI 专家多维研判中...' : 'AI expert multi-dimensional analysis...' }
+            ].map((item, i) => (
+              <motion.div 
+                key={i}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.4 }}
+                className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2 rounded-full text-[10px] uppercase tracking-wider font-bold"
+              >
+                <span className="text-accent">{item.icon}</span>
+                <span>{item.text}</span>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!location && !loading && !error) {
+    return (
+      <div className="min-h-screen bg-app-bg flex flex-col font-sans selection:bg-accent/30">
+        <header className="p-6 flex justify-between items-center max-w-7xl mx-auto w-full">
+          <div className="flex items-center gap-2">
+            <Fish size={28} className="text-primary" />
+            <h1 className="text-xl font-black tracking-tighter text-primary">HOOKLOGIC</h1>
+          </div>
+          <button 
+            onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+            className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-full shadow-md hover:bg-primary/90 transition-all"
+          >
+            {lang === 'zh' ? 'English' : '中文'}
+          </button>
+        </header>
+
+        <main className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-12"
+          >
+            <h2 className="text-5xl md:text-7xl font-black text-primary mb-6 tracking-tight leading-[1.1] uppercase">
+              {t.landing.title}
+            </h2>
+            <p className="text-lg md:text-xl text-text-light font-medium opacity-80 max-w-2xl mx-auto">
+              {t.landing.subtitle}
+            </p>
+          </motion.div>
+
+          <div className="w-full max-w-2xl relative z-20" ref={searchRef}>
+            <form onSubmit={handleSearch} className="relative mb-8">
+              <input 
+                type="text" 
+                placeholder={t.searchPlaceholder} 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
+                autoComplete="off"
+                className="w-full bg-white border-2 border-primary/10 rounded-2xl py-5 pl-14 pr-32 text-lg shadow-2xl focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/5 transition-all placeholder:text-slate-300 font-medium"
+              />
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-primary" size={24} />
+              
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                {isSearching ? (
+                  <RefreshCw className="text-primary animate-spin mr-4" size={20} />
+                ) : (
+                  <>
+                    <button 
+                      type="submit"
+                      className="bg-primary text-white px-6 py-2.5 rounded-xl font-bold hover:bg-primary/90 transition-all shadow-lg active:scale-95"
+                    >
+                      {t.landing.search}
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Dropdown in Landing */}
+              <AnimatePresence>
+                {showDropdown && searchResults.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute top-full left-0 right-0 mt-3 bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-100 overflow-hidden text-left"
+                  >
+                    <div className="p-3 max-h-[350px] overflow-y-auto">
+                      <div className="px-4 py-2 text-[10px] font-bold text-text-light uppercase border-b border-slate-50 mb-1">{t.selectLocation}</div>
+                      {searchResults.map((result, idx) => (
+                        <button
+                          key={`${result.lat}-${result.lon}-${idx}`}
+                          onClick={() => selectLocation(result)}
+                          className="w-full text-left p-4 hover:bg-primary/5 rounded-xl transition-colors flex items-start gap-4 border-b border-slate-50 last:border-none group"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-primary/5 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors shrink-0">
+                            <MapPin size={16} />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-md font-bold text-primary">{result.name}</span>
+                            <span className="text-xs text-text-light opacity-70">
+                              {result.admin1 ? `${result.admin1}, ` : ''}{result.country}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </form>
+
+            <div className="flex flex-wrap justify-center gap-4">
+              <button 
+                onClick={initData}
+                className="flex items-center gap-2 px-6 py-3 bg-white border border-primary/10 rounded-full text-sm font-bold text-primary hover:border-primary hover:bg-primary/5 transition-all shadow-md active:scale-95"
+              >
+                <Navigation size={16} className="text-accent" />
+                {t.landing.detectLocation}
+              </button>
+              
+              <div className="flex items-center gap-3 px-6 py-3">
+                <span className="text-xs font-bold text-text-light uppercase tracking-widest">{t.landing.popularSpots}:</span>
+                <div className="flex gap-2">
+                  {['Sans Souci', 'Kiama', 'Mornington'].map(spot => (
+                    <button 
+                      key={spot}
+                      onClick={() => {
+                        setSearchQuery(spot);
+                        handleSearch({ preventDefault: () => {} } as any);
+                      }}
+                      className="text-xs font-bold text-primary/60 hover:text-primary transition-colors underline decoration-primary/20 underline-offset-4"
+                    >
+                      {spot}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <footer className="p-8 text-center text-text-light text-[10px] uppercase tracking-widest mt-auto opacity-50">
+          <p>{t.footer.copy}</p>
+        </footer>
       </div>
     );
   }

@@ -12,6 +12,16 @@ export const i18n = {
     noLocation: '未找到该地点，请尝试输入更准确的名称。',
     analyzing: '正在研判鱼情...',
     analyzingDesc: '正在获取实时气象、潮汐与月相数据，并交由 AI 垂钓专家进行多维分析。',
+    loadingAnalysis: '专家研判中...',
+    loadingDescription: '正在调取澳大利亚水文气象数据，结合 AI 模型计算最佳钓点与鱼情，请稍候。',
+    landing: {
+      title: '精准预判，爆护之选',
+      subtitle: '全澳领先的 AI 智能垂钓分析系统',
+      detectLocation: '自动定位当前钓点',
+      search: '搜索',
+      startPrompt: '输入钓点名称开启专业分析',
+      popularSpots: '热门钓点推荐'
+    },
     error: '出错了',
     retry: '重试',
     targetSpecies: '目标鱼种',
@@ -136,6 +146,16 @@ export const i18n = {
     noLocation: 'Location not found. Please try a more specific name.',
     analyzing: 'Analyzing Conditions...',
     analyzingDesc: 'Gathering weather, tide, and moon data for AI expert analysis.',
+    loadingAnalysis: 'AI Expert Analysis...',
+    loadingDescription: 'Retrieving AU hydro-meteorological data. AI is calculating best spots and bite activity, please wait.',
+    landing: {
+      title: 'Precision Strikes, Every Time',
+      subtitle: 'AU\'s Premier AI-Driven Fishing Intelligence System',
+      detectLocation: 'Locate My Current Spot',
+      search: 'Search',
+      startPrompt: 'Enter a location to start analysis',
+      popularSpots: 'Popular Fishing Spots'
+    },
     error: 'Error',
     retry: 'Retry',
     targetSpecies: 'Target Species',
