@@ -8,7 +8,8 @@ export const i18n = {
     currentLocation: '当前作业坐标',
     searchPlaceholder: '搜索澳洲城市或钓点 (如: Sans Souci)...',
     auOnly: '仅限澳洲',
-    selectingLocation: '请选择精确位置',
+    selectLocation: '请选择精确位置',
+    noLocation: '未找到该地点，请尝试输入更准确的名称。',
     analyzing: '正在研判鱼情...',
     analyzingDesc: '正在获取实时气象、潮汐与月相数据，并交由 AI 垂钓专家进行多维分析。',
     error: '出错了',
@@ -65,6 +66,11 @@ export const i18n = {
     gearAdvice: '查看详细装备建议',
     fishGeneral: '通用',
     tideUnits: 'm',
+    close: '确认并返回',
+    footer: {
+      copy: '© 2026 HOOKLOGIC - 智能垂钓决策系统',
+      disclaimer: '数据基于多维水文模型与 AI 综合分析，仅供参考'
+    },
     weatherAlerts: {
       thunderstorm: {
         title: '雷暴极致警报',
@@ -89,6 +95,16 @@ export const i18n = {
       snowy: '降雪',
       showers: '阵雨',
       thunder: '雷雨'
+    },
+    moonPhases: {
+      newMoon: '新月',
+      waxingCrescent: '峨眉月',
+      firstQuarter: '上弦月',
+      waxingGibbous: '盈凸月',
+      fullMoon: '满月',
+      waningGibbous: '亏凸月',
+      lastQuarter: '下弦月',
+      waningCrescent: '残月'
     },
     gearModal: {
       title: '专业装备建议清单',
@@ -116,7 +132,8 @@ export const i18n = {
     currentLocation: 'CURRENT COORD',
     searchPlaceholder: 'Search AU city or spot (e.g. Sans Souci)...',
     auOnly: 'AU ONLY',
-    selectingLocation: 'Select exact location',
+    selectLocation: 'Select exact location',
+    noLocation: 'Location not found. Please try a more specific name.',
     analyzing: 'Analyzing Conditions...',
     analyzingDesc: 'Gathering weather, tide, and moon data for AI expert analysis.',
     error: 'Error',
@@ -173,6 +190,11 @@ export const i18n = {
     gearAdvice: 'Show Gear Advice',
     fishGeneral: 'General',
     tideUnits: 'm',
+    close: 'Got it',
+    footer: {
+      copy: '© 2026 HOOKLOGIC - AI Fishing Intelligence',
+      disclaimer: 'Data based on multi-dimensional hydrological models and AI analysis. Ref use only.'
+    },
     weatherAlerts: {
       thunderstorm: {
         title: 'Thunderstorm Warning',
@@ -197,6 +219,16 @@ export const i18n = {
       snowy: 'Snowy',
       showers: 'Showers',
       thunder: 'Thunder'
+    },
+    moonPhases: {
+      newMoon: 'New Moon',
+      waxingCrescent: 'Waxing Crescent',
+      firstQuarter: 'First Quarter',
+      waxingGibbous: 'Waxing Gibbous',
+      fullMoon: 'Full Moon',
+      waningGibbous: 'Waning Gibbous',
+      lastQuarter: 'Last Quarter',
+      waningCrescent: 'Waning Crescent'
     },
     gearModal: {
       title: 'Professional Gear Checklist',

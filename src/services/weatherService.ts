@@ -127,14 +127,14 @@ export function getMoonData(date: Date): MoonData {
   const phasePercent = phase / lp;
 
   let name = "";
-  if (phasePercent < 0.05) name = "新月";
-  else if (phasePercent < 0.25) name = "峨眉月";
-  else if (phasePercent < 0.30) name = "上弦月";
-  else if (phasePercent < 0.45) name = "盈凸月";
-  else if (phasePercent < 0.55) name = "满月";
-  else if (phasePercent < 0.70) name = "亏凸月";
-  else if (phasePercent < 0.75) name = "下弦月";
-  else name = "残月";
+  if (phasePercent < 0.05) name = "newMoon";
+  else if (phasePercent < 0.25) name = "waxingCrescent";
+  else if (phasePercent < 0.30) name = "firstQuarter";
+  else if (phasePercent < 0.45) name = "waxingGibbous";
+  else if (phasePercent < 0.55) name = "fullMoon";
+  else if (phasePercent < 0.70) name = "waningGibbous";
+  else if (phasePercent < 0.75) name = "lastQuarter";
+  else name = "waningCrescent";
 
   // Solunar periods simulation
   const hour = date.getHours();

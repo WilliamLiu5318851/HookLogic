@@ -51,6 +51,11 @@ export interface SpeciesSpecificAnalysis {
   targetDepth: string;
   baitSuggestion: string;
   techniqueSuggestion: string;
+  rodSuggestion?: string;
+  reelSuggestion?: string;
+  lineSuggestion?: string;
+  leaderSuggestion?: string;
+  tackleSuggestion?: string;
   hourlyTrends?: { time: string; score: number }[];
 }
 
@@ -62,6 +67,11 @@ export interface FishingAnalysis {
   targetDepth: string;
   baitSuggestion: string;
   techniqueSuggestion: string;
+  rodSuggestion?: string;
+  reelSuggestion?: string;
+  lineSuggestion?: string;
+  leaderSuggestion?: string;
+  tackleSuggestion?: string;
   hourlyTrends?: { time: string; score: number }[]; // 0-100 scores for upcoming hours
   speciesAnalysis: Record<string, SpeciesSpecificAnalysis>;
 }

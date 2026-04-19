@@ -82,6 +82,10 @@ const getWeatherAlert = (code: number, lang: Language) => {
   return null;
 };
 
+const getMoonPhaseLabel = (key: string, lang: Language) => {
+  return (i18n[lang].moonPhases as any)[key] || key;
+};
+
 export default function App() {
   const [lang, setLang] = useState<Language>('zh');
   const t = i18n[lang];
@@ -235,7 +239,7 @@ export default function App() {
       setSearchResults(results);
       setShowDropdown(true);
     } else {
-      alert('未找到该地点，请尝试输入更准确的名称。');
+      alert(t.noLocation);
     }
   };
 
@@ -272,6 +276,20 @@ export default function App() {
   };
 
   const activeData = getActiveData();
+
+  const getFishDisplayName = (fish: string, currentLang: Language) => {
+    if (fish === '通用') return t.fishGeneral;
+    if (!fish.includes('(')) return fish;
+    
+    const [zh, en] = fish.split('(').map(s => s.replace(')', ''));
+    return currentLang === 'zh' ? zh : en;
+  };
+
+  const getFishSecondaryName = (fish: string, currentLang: Language) => {
+    if (currentLang === 'en' || fish === '通用' || !fish.includes('(')) return null;
+    const [zh, en] = fish.split('(').map(s => s.replace(')', ''));
+    return currentLang === 'zh' ? en : zh;
+  };
 
   if (loading) {
     return (
@@ -376,7 +394,7 @@ export default function App() {
                 className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-slate-100 overflow-hidden z-[60]"
               >
                 <div className="p-2 max-h-[300px] overflow-y-auto">
-                  <div className="px-3 py-2 text-[10px] font-bold text-text-light uppercase border-b border-slate-50">{t.selectingLocation}</div>
+                  <div className="px-3 py-2 text-[10px] font-bold text-text-light uppercase border-b border-slate-50">{t.selectLocation}</div>
                   {searchResults.map((result, idx) => (
                     <button
                       key={`${result.lat}-${result.lon}-${idx}`}
@@ -471,7 +489,7 @@ export default function App() {
             >
               <div className="text-[10px] uppercase tracking-widest font-bold text-text-light flex items-center gap-1">
                 <Fish size={14} className="text-accent" />
-                {t.targetSpecies}: <span className="text-primary ml-1 truncate max-w-[120px]">{selectedFish === '通用' ? t.fishGeneral : selectedFish}</span>
+                {t.targetSpecies}: <span className="text-primary ml-1 truncate max-w-[120px]">{getFishDisplayName(selectedFish, lang)}</span>
               </div>
               {isFishSelectorExpanded ? <ChevronUp size={14} className="text-text-light" /> : <ChevronDown size={14} className="text-text-light" />}
             </button>
@@ -512,7 +530,8 @@ export default function App() {
                         return fish.toLowerCase().includes(searchLower) || (lang === 'en' && t.fishGeneral.toLowerCase().includes(searchLower));
                       })
                       .map((fish) => {
-                        const displayName = fish === '通用' ? t.fishGeneral : fish;
+                        const mainName = getFishDisplayName(fish, lang);
+                        const subName = getFishSecondaryName(fish, lang);
                         return (
                           <button
                             key={fish}
@@ -521,14 +540,14 @@ export default function App() {
                               setFishSearchQuery('');
                             }}
                             className={cn(
-                              "py-2 px-1 text-[9px] font-bold rounded-lg border transition-all text-center leading-tight",
+                              "py-2 px-1 text-[9px] font-bold rounded-lg border transition-all text-center leading-tight flex flex-col items-center justify-center min-h-[40px]",
                               selectedFish === fish 
                                 ? "bg-primary text-white border-primary shadow-md" 
                                 : "bg-white text-text-light border-app-border hover:border-accent hover:text-accent"
                             )}
                           >
-                            {displayName.split('(')[0]}
-                            {displayName.includes('(') && <span className="block opacity-60 font-normal scale-90 mt-0.5">{displayName.split('(')[1].replace(')', '')}</span>}
+                            <span>{mainName}</span>
+                            {subName && <span className="block opacity-60 font-normal scale-[0.85] mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-full">{subName}</span>}
                           </button>
                         );
                       })}
@@ -553,11 +572,11 @@ export default function App() {
                       setSelectedFish(fish);
                     }}
                     className={cn(
-                      "flex-shrink-0 px-3 py-1 text-[9px] font-bold rounded-full border transition-all",
+                      "flex-shrink-0 px-3 py-1 text-[9px] font-bold rounded-full border transition-all whitespace-nowrap",
                       selectedFish === fish ? "bg-accent text-primary border-accent" : "bg-slate-50 text-text-light border-slate-200"
                     )}
                   >
-                    {fish === '通用' ? t.fishGeneral : fish.split('(')[0]}
+                    {getFishDisplayName(fish, lang)}
                   </button>
                 ))}
                 <button 
@@ -725,7 +744,7 @@ export default function App() {
                 />
               </div>
               <div>
-                <div className="text-lg font-bold">{isForecastMode ? tomorrowMoon?.phaseName : moon?.phaseName}</div>
+                <div className="text-lg font-bold">{isForecastMode ? getMoonPhaseLabel(tomorrowMoon?.phaseName || '', lang) : getMoonPhaseLabel(moon?.phaseName || '', lang)}</div>
                 <div className="text-xs text-text-light">{t.illumination}: {Math.round(((isForecastMode ? tomorrowMoon?.phase : moon?.phase) || 0) * 100)}%</div>
               </div>
             </div>
@@ -1043,7 +1062,7 @@ export default function App() {
           <div className="bg-card-bg border border-app-border rounded-xl p-4 md:p-6 shadow-sm md:col-span-2">
             <div className="text-[10px] uppercase tracking-widest font-bold text-text-light mb-4 md:mb-6 flex justify-between items-center">
               <span>{isForecastMode ? t.tomorrowRecs : t.recommendations}</span>
-              <span className="text-accent font-black">[{selectedFish === '通用' ? t.fishGeneral : selectedFish}]</span>
+              <span className="text-accent font-black">[{getFishDisplayName(selectedFish, lang)}]</span>
             </div>
             <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start md:items-center">
               <div className="w-full md:flex-1 space-y-3">
@@ -1149,7 +1168,7 @@ export default function App() {
                           {t.gearModal.labels.rod}
                           <Info size={10} />
                         </p>
-                        <p className="text-sm font-medium">{lang === 'zh' ? '2.4m - 2.7m M/MH 调性碳素路亚竿' : '2.4m - 2.7m M/MH Fast Action Carbon Rod'}</p>
+                        <p className="text-sm font-medium">{activeData?.rodSuggestion || (lang === 'zh' ? '2.4m - 2.7m M/MH 调性碳素路亚竿' : '2.4m - 2.7m M/MH Fast Action Carbon Rod')}</p>
                         <div className="absolute inset-0 bg-primary/95 text-white p-3 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center leading-relaxed">
                           {lang === 'zh' ? 'M/MH 调性提供足够的腰力来应对当前水流，碳素材质保证了感度，能清晰感知轻微咬钩。' : 'M/MH action provides power for currents; carbon material ensures sensitivity to detect subtle bites.'}
                         </div>
@@ -1159,7 +1178,7 @@ export default function App() {
                           {t.gearModal.labels.reel}
                           <Info size={10} />
                         </p>
-                        <p className="text-sm font-medium">{lang === 'zh' ? '2500 - 3000 型纺车轮 (高速比建议)' : '2500 - 3000 Series Spinning Reel (High Speed)'}</p>
+                        <p className="text-sm font-medium">{activeData?.reelSuggestion || (lang === 'zh' ? '2500 - 3000 型纺车轮 (高速比建议)' : '2500 - 3000 Series Spinning Reel (High Speed)')}</p>
                         <div className="absolute inset-0 bg-primary/95 text-white p-3 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center leading-relaxed">
                           {lang === 'zh' ? '高速比卷线器有助于在复杂水域快速收线，防止挂底，3000型容量足以应对突发的大鱼冲击。' : 'High gear ratio helps retrieve quickly to avoid snags. 3000 size handles unexpected big fish strikes.'}
                         </div>
@@ -1176,7 +1195,7 @@ export default function App() {
                           {t.gearModal.labels.line}
                           <Info size={10} />
                         </p>
-                        <p className="text-sm font-medium">{lang === 'zh' ? '1.2# - 1.5# 高强度 PE 线 (8编)' : '15-20lb Braided Line (PE 1.2-1.5)'}</p>
+                        <p className="text-sm font-medium">{activeData?.lineSuggestion || (lang === 'zh' ? '1.2# - 1.5# 高强度 PE 线 (8编)' : '15-20lb Braided Line (PE 1.2-1.5)')}</p>
                         <div className="absolute inset-0 bg-primary/95 text-white p-3 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center leading-relaxed">
                           {lang === 'zh' ? 'PE线零延展性提供极佳传导，8编工艺更圆滑，能有效增加抛投距离并降低风阻。' : 'Braid provides zero stretch for sensitivity. 8-strand weaving increases casting distance and reduces wind drag.'}
                         </div>
@@ -1186,7 +1205,7 @@ export default function App() {
                           {t.gearModal.labels.leader}
                           <Info size={10} />
                         </p>
-                        <p className="text-sm font-medium">{lang === 'zh' ? '3.0# - 4.0# 碳素前导线 (约 1.5m)' : '12-16lb Fluorocarbon Leader (1.5m)'}</p>
+                        <p className="text-sm font-medium">{activeData?.leaderSuggestion || (lang === 'zh' ? '3.0# - 4.0# 碳素前导线 (约 1.5m)' : '12-16lb Fluorocarbon Leader (1.5m)')}</p>
                         <div className="absolute inset-0 bg-primary/95 text-white p-3 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center leading-relaxed">
                           {lang === 'zh' ? '碳素线耐磨性强，且在水中几乎透明，能防止主线被礁石磨断并降低鱼的警觉性。' : 'Fluoro is abrasion-resistant and invisible underwater, preventing cut-offs on rocks and spooking fish.'}
                         </div>
@@ -1203,7 +1222,7 @@ export default function App() {
                           {t.gearModal.labels.lure}
                           <Info size={10} />
                         </p>
-                        <p className="text-sm font-medium">{activeData?.baitSuggestion === '通用' || activeData?.baitSuggestion === 'General' ? (lang === 'zh' ? '10g-15g 沉水米诺或亮片' : '10g-15g Sinking Minnow or Spoon') : activeData?.baitSuggestion}</p>
+                        <p className="text-sm font-medium">{activeData?.baitSuggestion || (lang === 'zh' ? '10g-15g 沉水米诺或亮片' : '10g-15g Sinking Minnow or Spoon')}</p>
                         <div className="absolute inset-0 bg-primary/95 text-white p-3 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center leading-relaxed">
                           {lang === 'zh' ? '根据当前水深推荐。沉水米诺能快速到达目标泳层，亮片则在光照充足时提供强烈的反光诱惑。' : 'Recommended based on depth. Sinking minnows reach the strike zone fast; spoons provide flash in high light.'}
                         </div>
@@ -1213,7 +1232,7 @@ export default function App() {
                           {t.gearModal.labels.tackle}
                           <Info size={10} />
                         </p>
-                        <p className="text-sm font-medium">{lang === 'zh' ? '#00 增强型加固别针 + 5g 快速子弹铅' : '#00 Power Snap + 5g Bullet Sinkers'}</p>
+                        <p className="text-sm font-medium">{activeData?.tackleSuggestion || (lang === 'zh' ? '#00 增强型加固别针 + 5g 快速子弹铅' : '#00 Power Snap + 5g Bullet Sinkers')}</p>
                         <div className="absolute inset-0 bg-primary/95 text-white p-3 text-[10px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center leading-relaxed">
                           {lang === 'zh' ? '加固别针防止大鱼拉开，子弹铅能增加抛投稳定性，并帮助假饵在强风中快速切入水面。' : 'Heavy-duty snaps prevent forced opens. Bullet sinkers increase stability and help lures cut through wind.'}
                         </div>
@@ -1265,7 +1284,7 @@ export default function App() {
                   onClick={() => setIsGearModalOpen(false)}
                   className="px-8 py-2.5 bg-primary text-white rounded-lg font-bold hover:bg-primary/90 transition-all shadow-md"
                 >
-                  确认并返回
+                  {t.close}
                 </button>
               </div>
             </motion.div>
@@ -1274,8 +1293,8 @@ export default function App() {
       </AnimatePresence>
 
       <footer className="max-w-7xl mx-auto p-8 text-center text-text-light text-[10px] uppercase tracking-widest">
-        <p>© 2026 HOOKLOGIC - 智能垂钓决策系统</p>
-        <p className="mt-2 opacity-60 font-medium">数据基于多维水文模型与 AI 综合分析，仅供参考</p>
+        <p>{t.footer.copy}</p>
+        <p className="mt-2 opacity-60 font-medium">{t.footer.disclaimer}</p>
       </footer>
     </div>
   );
