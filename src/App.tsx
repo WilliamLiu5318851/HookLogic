@@ -35,7 +35,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { LocationData, WeatherData, TideData, MoonData, FishingAnalysis, HourlyForecast } from './types';
 import { fetchWeatherData, fetchMarineData, getMoonData, geocodeLocation } from './services/weatherService';
-import { analyzeFishingConditions } from './services/geminiService';
+import { fetchQuickAnalysis, fetchDeepAnalysis } from './services/geminiService';
 import { i18n, type Language } from './translations';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -74,9 +74,8 @@ const getWeatherLabel = (code: number, lang: Language) => {
   return labels.sunny;
 };
 
-const getWeatherAlert = (code: number, windSpeed: number, lang: Language) => {
+const getWeatherAlert = (code: number, lang: Language) => {
   const alerts = i18n[lang].weatherAlerts;
-  if (windSpeed > 40) return alerts.wind;
   if (code >= 95) return alerts.thunderstorm;
   if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return alerts.snow;
   if (code >= 61 && code <= 67 || (code >= 80 && code <= 82)) return alerts.rain;
@@ -103,6 +102,7 @@ export default function App() {
   const [isForecastMode, setIsForecastMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isForecastLoading, setIsForecastLoading] = useState(false);
+  const [isDeepLoading, setIsDeepLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isGearModalOpen, setIsGearModalOpen] = useState(false);
   const [isFishSelectorExpanded, setIsFishSelectorExpanded] = useState(false);
@@ -111,7 +111,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [locationName, setLocationName] = useState<string | null>(null);
-  const [searchResults, setSearchResults] = useState<{ lat: number; lon: number; name: string; country?: string; admin1?: string }[]>([]);
+  const [searchResults, setSearchResults] = useState<{ lat: number; lon: number; name: string; country?: string; admin1?: string; postcode?: string }[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const searchRef = React.useRef<HTMLDivElement>(null);
 
@@ -148,7 +148,7 @@ export default function App() {
       setTide(marineData);
       setMoon(moonData);
 
-      const aiResult = await analyzeFishingConditions(loc, weatherResponse.current, marineData, moonData, weatherResponse.hourly, false, currentLang);
+      const aiResult = await fetchQuickAnalysis(loc, weatherResponse.current, marineData, moonData, weatherResponse.hourly, false, currentLang);
       setAnalysis(aiResult);
     } catch (err: any) {
       console.error(err);
@@ -196,7 +196,7 @@ export default function App() {
         setTomorrowTide(tTide);
         setTomorrowMoon(tMoon);
 
-        const aiResult = await analyzeFishingConditions(location, tWeather, tTide, tMoon, [], true, currentLang);
+        const aiResult = await fetchQuickAnalysis(location, tWeather, tTide, tMoon, weatherResp.hourly, true, currentLang);
         setForecastAnalysis(aiResult);
       }
     } catch (err) {
@@ -245,7 +245,7 @@ export default function App() {
   };
 
   const selectLocation = (result: typeof searchResults[0]) => {
-    const fullName = `${result.name}${result.admin1 ? `, ${result.admin1}` : ''}${result.country ? `, ${result.country}` : ''}`;
+    const fullName = `${result.name}${result.postcode ? ` ${result.postcode}` : ''}${result.admin1 ? `, ${result.admin1}` : ''}${result.country ? `, ${result.country}` : ''}`;
     fetchDataForCoords(result.lat, result.lon, fullName);
     setSearchQuery('');
     setShowDropdown(false);
@@ -273,10 +273,62 @@ export default function App() {
     const base = isForecastMode ? forecastAnalysis : analysis;
     if (!base) return null;
     if (selectedFish === '通用') return base;
-    return base.speciesAnalysis?.[selectedFish] || base;
+    
+    // Prioritize deep analysis data if it exists in the speciesAnalysis
+    const speciesData = base.speciesAnalysis?.[selectedFish];
+    if (speciesData) {
+      // Merge with base to provide fallbacks for fields not present in quick species analysis
+      return { ...base, ...speciesData };
+    }
+    return base;
+  };
+
+  const handleDeepAnalysis = async () => {
+    const base = isForecastMode ? forecastAnalysis : analysis;
+    const currentLoc = location;
+    const currentWeather = isForecastMode ? tomorrowWeather : weather;
+    const currentTide = isForecastMode ? tomorrowTide : tide;
+    const currentMoon = isForecastMode ? tomorrowMoon : moon;
+    
+    if (!base || !currentLoc || !currentWeather || !currentTide || !currentMoon) return;
+    
+    setIsDeepLoading(true);
+    try {
+      const deepData = await fetchDeepAnalysis(
+        selectedFish, 
+        currentLoc, 
+        currentWeather, 
+        currentTide, 
+        currentMoon, 
+        hourlyForecast, 
+        isForecastMode, 
+        lang
+      );
+      
+      const updateFn = isForecastMode ? setForecastAnalysis : setAnalysis;
+      updateFn(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          speciesAnalysis: {
+            ...prev.speciesAnalysis,
+            [selectedFish]: {
+              ...prev.speciesAnalysis?.[selectedFish],
+              ...deepData,
+              isDeep: true // Mark as deep analysis complete
+            }
+          }
+        };
+      });
+    } catch (err) {
+      console.error("Deep analysis failed:", err);
+    } finally {
+      setIsDeepLoading(false);
+    }
   };
 
   const activeData = getActiveData();
+  const hasDeepData = (activeData as any)?.isDeep || selectedFish === '通用';
 
   const getFishDisplayName = (fish: string, currentLang: Language) => {
     if (fish === '通用') return t.fishGeneral;
@@ -448,7 +500,9 @@ export default function App() {
                             <MapPin size={16} />
                           </div>
                           <div className="flex flex-col">
-                            <span className="text-md font-bold text-primary">{result.name}</span>
+                            <span className="text-md font-bold text-primary">
+                              {result.name} {result.postcode && <span className="text-accent ml-1">[{result.postcode}]</span>}
+                            </span>
                             <span className="text-xs text-text-light opacity-70">
                               {result.admin1 ? `${result.admin1}, ` : ''}{result.country}
                             </span>
@@ -592,7 +646,9 @@ export default function App() {
                     >
                       <MapPin className="text-accent mt-1 shrink-0" size={14} />
                       <div className="flex flex-col">
-                        <span className="text-sm font-bold text-primary">{result.name}</span>
+                        <span className="text-sm font-bold text-primary">
+                          {result.name} {result.postcode && <span className="text-accent ml-1">[{result.postcode}]</span>}
+                        </span>
                         <span className="text-[10px] text-text-light">
                           {result.admin1 ? `${result.admin1}, ` : ''}{result.country}
                         </span>
@@ -651,11 +707,7 @@ export default function App() {
         {/* Sidebar */}
         <aside className="space-y-6 flex flex-col">
           {/* Weather Alert Banner */}
-          {(isForecastMode ? tomorrowWeather : weather) && getWeatherAlert(
-            (isForecastMode ? tomorrowWeather : weather)!.weatherCode, 
-            (isForecastMode ? tomorrowWeather : weather)!.windSpeed, 
-            lang
-          ) && (
+          {(isForecastMode ? tomorrowWeather : weather) && getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang) && (
             <motion.div 
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -664,19 +716,11 @@ export default function App() {
               <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
               <div>
                 <div className="text-sm font-bold text-red-800">
-                  {getWeatherAlert(
-                    (isForecastMode ? tomorrowWeather : weather)!.weatherCode, 
-                    (isForecastMode ? tomorrowWeather : weather)!.windSpeed, 
-                    lang
-                  )?.title}
+                  {getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang)?.title}
                   {isForecastMode && <span className="ml-2 text-[10px] font-normal opacity-70">({t.tomorrowForecast})</span>}
                 </div>
                 <p className="text-xs text-red-700 leading-relaxed mt-1">
-                  {getWeatherAlert(
-                    (isForecastMode ? tomorrowWeather : weather)!.weatherCode, 
-                    (isForecastMode ? tomorrowWeather : weather)!.windSpeed, 
-                    lang
-                  )?.message}
+                  {getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang)?.message}
                 </p>
               </div>
             </motion.div>
@@ -958,7 +1002,7 @@ export default function App() {
               {t.expertInsight}
             </div>
             <p className="text-xs text-amber-800/80 leading-relaxed">
-              {activeData?.recommendations[0] || (lang === 'zh' ? "气压上升期间，鱼类活性显著增强。建议尝试深浅交替区。" : "Fishing activity increases significantly during rising pressure. Try drop-off areas.")}
+              {activeData?.recommendations?.[0] || (lang === 'zh' ? "气压上升期间，鱼类活性显著增强。建议尝试深浅交替区。" : "Fishing activity increases significantly during rising pressure. Try drop-off areas.")}
             </p>
           </div>
         </aside>
@@ -968,11 +1012,7 @@ export default function App() {
           {/* Weather Card */}
           <div className="bg-card-bg border border-app-border rounded-xl p-6 shadow-sm">
             {/* Weather Alerts */}
-            {(isForecastMode ? tomorrowWeather : weather) && getWeatherAlert(
-              (isForecastMode ? tomorrowWeather : weather)!.weatherCode, 
-              (isForecastMode ? tomorrowWeather : weather)!.windSpeed, 
-              lang
-            ) && (
+            {(isForecastMode ? tomorrowWeather : weather) && getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang) && (
               <motion.div 
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
@@ -981,19 +1021,11 @@ export default function App() {
                 <AlertCircle className="text-red-500 shrink-0" size={18} />
                 <div className="flex-1">
                   <div className="text-[10px] font-bold text-red-800 uppercase flex justify-between">
-                    <span>{getWeatherAlert(
-                      (isForecastMode ? tomorrowWeather : weather)!.weatherCode, 
-                      (isForecastMode ? tomorrowWeather : weather)!.windSpeed, 
-                      lang
-                    )?.title} ({isForecastMode ? t.tomorrowForecast : t.todayLive})</span>
+                    <span>{getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang)?.title} ({isForecastMode ? t.tomorrowForecast : t.todayLive})</span>
                     <span>{lang === 'zh' ? '代码' : 'Code'}: {(isForecastMode ? tomorrowWeather : weather)!.weatherCode}</span>
                   </div>
                   <p className="text-[11px] text-red-700 font-medium">
-                    {getWeatherAlert(
-                      (isForecastMode ? tomorrowWeather : weather)!.weatherCode, 
-                      (isForecastMode ? tomorrowWeather : weather)!.windSpeed, 
-                      lang
-                    )?.message}
+                    {getWeatherAlert((isForecastMode ? tomorrowWeather : weather)!.weatherCode, lang)?.message}
                   </p>
                 </div>
               </motion.div>
@@ -1248,9 +1280,13 @@ export default function App() {
                 />
 
                 {/* Current Time Indicator on Tide Graph */}
-                {!isForecastMode && (
+                {!isForecastMode && weather && (
                   <motion.circle
-                    cx={(new Date().getHours() / 23) * 100}
+                    cx={(() => {
+                      const d = new Date(weather.time);
+                      const hours = d.getHours() + d.getMinutes() / 60;
+                      return (hours / 24) * 100;
+                    })()}
                     cy={40 - (((tide?.height || 2) - 0.5) / 3) * 30 - 5}
                     r="2"
                     fill="white"
@@ -1277,8 +1313,35 @@ export default function App() {
               <span>{isForecastMode ? t.tomorrowRecs : t.recommendations}</span>
               <span className="text-accent font-black">[{getFishDisplayName(selectedFish, lang)}]</span>
             </div>
-            <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start md:items-center">
-              <div className="w-full md:flex-1 space-y-3">
+            <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start md:items-center relative">
+              {!hasDeepData && (
+                <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-6 text-center rounded-xl">
+                  {isDeepLoading ? (
+                    <div className="flex flex-col items-center gap-4">
+                      <RefreshCw className="text-primary animate-spin" size={32} />
+                      <p className="text-sm font-bold text-primary animate-pulse">{t.deepLoading}</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-2">
+                        <Zap size={24} />
+                      </div>
+                      <h4 className="text-lg font-black text-primary uppercase">{t.deepAnalysis}</h4>
+                      <p className="text-xs text-text-light max-w-[280px] mb-4">
+                        {lang === 'zh' ? '当前为极速概览模式，深度研判将调动更高级 AI 模型分析季节洄游、气压精算及专业钓组规格。' : 'Quick overview mode. Deep analysis uses advanced AI for migration, pressure precision, and pro gear specs.'}
+                      </p>
+                      <button 
+                        onClick={handleDeepAnalysis}
+                        className="bg-primary text-white px-8 py-3 rounded-full font-bold shadow-xl hover:scale-105 transition-transform active:scale-95 flex items-center gap-2"
+                      >
+                        <Zap size={16} className="text-accent" />
+                        {t.requestDeep}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className={cn("w-full md:flex-1 space-y-3", !hasDeepData && "blur-[2px] opacity-20 pointer-events-none")}>
                 <div className="flex items-center justify-between">
                   <div className="text-xl font-bold text-primary">{t.suggestedDepth}: {activeData?.targetDepth}</div>
                   <div className="group relative">
@@ -1290,10 +1353,10 @@ export default function App() {
                 </div>
                 <div className="text-xs font-bold text-text-light uppercase tracking-tight">{t.activeTime}: {activeData?.bestTime}</div>
                 <p className="text-sm text-text-dark leading-relaxed">
-                  {activeData?.recommendations[1]} {activeData?.recommendations[2]}
+                  {activeData?.recommendations?.[1]} {activeData?.recommendations?.[2]}
                 </p>
               </div>
-              <div className="w-full md:flex-1 space-y-3 border-t md:border-t-0 md:border-l border-app-border pt-6 md:pt-0 md:pl-8">
+              <div className={cn("w-full md:flex-1 space-y-3 border-t md:border-t-0 md:border-l border-app-border pt-6 md:pt-0 md:pl-8", !hasDeepData && "blur-[2px] opacity-20 pointer-events-none")}>
                 <div className="flex flex-col space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="text-xl font-bold text-primary">{t.baitSuggestion}: {activeData?.baitSuggestion}</div>
@@ -1315,7 +1378,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  {activeData?.recommendations.slice(3).map((rec, i) => (
+                  {activeData?.recommendations?.slice(3).map((rec, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs text-text-dark">
                       <CheckCircle2 size={14} className="text-success" />
                       {rec}
@@ -1326,7 +1389,11 @@ export default function App() {
             </div>
             <button 
               onClick={() => setIsGearModalOpen(true)}
-              className="mt-8 w-full bg-primary text-white py-3 rounded-lg font-bold hover:bg-primary/90 transition-all shadow-md active:scale-[0.98]"
+              disabled={!hasDeepData}
+              className={cn(
+                "mt-8 w-full py-3 rounded-lg font-bold transition-all shadow-md active:scale-[0.98]",
+                hasDeepData ? "bg-primary text-white hover:bg-primary/90" : "bg-slate-100 text-slate-300 cursor-not-allowed"
+              )}
             >
               {t.gearAdvice}
             </button>

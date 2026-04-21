@@ -77,15 +77,14 @@ export const i18n = {
     fishGeneral: '通用',
     tideUnits: 'm',
     close: '确认并返回',
+    deepAnalysis: '深度研判',
+    requestDeep: '点击开启深度高算力研判 (耗时较长)',
+    deepLoading: '正在调动高级 AI 模型进行多维测算...',
     footer: {
       copy: '© 2026 HOOKLOGIC - 智能垂钓决策系统',
       disclaimer: '数据基于多维水文模型与 AI 综合分析，仅供参考'
     },
     weatherAlerts: {
-      wind: {
-        title: '强风气象警报',
-        message: '实时风速已超过 40km/h。此风力下抛投难度极大，建议寻找背风处或遮蔽良好的内湾作钓，并增加铅坠重力以维持线组稳定。'
-      },
       thunderstorm: {
         title: '雷暴极致警报',
         message: '检测到雷电和强风风险，请立即停止所有水面作业并寻找安全避所。'
@@ -215,15 +214,14 @@ export const i18n = {
     fishGeneral: 'General',
     tideUnits: 'm',
     close: 'Got it',
+    deepAnalysis: 'Deep Analysis',
+    requestDeep: 'Request Deep AI Analysis (Takes longer)',
+    deepLoading: 'Mobilizing Advanced AI for multi-dimensional calculation...',
     footer: {
       copy: '© 2026 HOOKLOGIC - AI Fishing Intelligence',
       disclaimer: 'Data based on multi-dimensional hydrological models and AI analysis. Ref use only.'
     },
     weatherAlerts: {
-      wind: {
-        title: 'Strong Wind Warning',
-        message: 'Live wind speeds exceed 40km/h. Casting will be difficult. Seek sheltered bays or leeward shores, and increase sinker weight to maintain terminal stability.'
-      },
       thunderstorm: {
         title: 'Thunderstorm Warning',
         message: 'Lightning and strong wind risks detected. Stop all water activities and find shelter.'

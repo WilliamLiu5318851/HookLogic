@@ -152,8 +152,34 @@ export function getMoonData(date: Date): MoonData {
 /**
  * Geocode a location name to coordinates using Google Maps grounding via Gemini
  */
-export async function geocodeLocation(query: string): Promise<{ lat: number; lon: number; name: string; country?: string; admin1?: string }[]> {
-  // First, always try Nominatim (OpenStreetMap) as it's free and fast, restricted to Australia
+export async function geocodeLocation(query: string): Promise<{ lat: number; lon: number; name: string; country?: string; admin1?: string; postcode?: string }[]> {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Find the precise coordinates (latitude and longitude), city/suburb, state, postcode, and country for: "${query}". 
+      Please prioritize results in Australia.
+      Include the postal code (postcode) if possible.
+      Return only a JSON array of objects: [{"lat": number, "lon": number, "name": string, "country": string, "admin1": string, "postcode": string}]. 
+      Do not include any conversational text, only the JSON.`,
+      config: {
+        tools: [{ googleMaps: {} }],
+        // Note: responseMimeType and responseSchema are NOT supported when using the googleMaps tool.
+      }
+    });
+
+    const text = response.text || "[]";
+    // Extract JSON array from potential markdown blocks or extra text
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    const results = JSON.parse(jsonMatch ? jsonMatch[0] : text);
+    
+    if (Array.isArray(results) && results.length > 0) {
+      return results;
+    }
+  } catch (error) {
+    console.error('Google Maps Grounding error:', error);
+  }
+
+  // First, try Nominatim (OpenStreetMap) as a strong fallback, restricted to Australia
   const osmUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5&accept-language=zh,en&countrycodes=au`;
   
   try {
@@ -169,9 +195,10 @@ export async function geocodeLocation(query: string): Promise<{ lat: number; lon
         return data.map((result: any) => ({
           lat: parseFloat(result.lat),
           lon: parseFloat(result.lon),
-          name: result.display_name.split(',')[0] + (result.address?.suburb ? ` (${result.address.suburb})` : ''),
+          name: result.display_name.split(',')[0],
           country: result.address?.country,
-          admin1: result.address?.state || result.address?.city
+          admin1: result.address?.state || result.address?.city,
+          postcode: result.address?.postcode
         }));
       }
     }
@@ -179,35 +206,11 @@ export async function geocodeLocation(query: string): Promise<{ lat: number; lon
     console.error('OSM Geocoding error:', error);
   }
 
-  // Fallback to Gemini only if OSM fails - to save quota
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Find the precise coordinates (latitude and longitude), city/suburb, and country for: "${query}". 
-      Please prioritize results in Australia.
-      Return only a JSON array of objects: [{"lat": number, "lon": number, "name": string, "country": string, "admin1": string}]. 
-      Do not include any conversational text, only the JSON.`,
-      config: {
-        tools: [{ googleMaps: {} }],
-      }
-    });
-
-    const text = response.text || "[]";
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    const results = JSON.parse(jsonMatch ? jsonMatch[0] : text);
-    
-    if (Array.isArray(results) && results.length > 0) {
-      return results;
-    }
-  } catch (error) {
-    console.error('Google Maps Grounding error:', error);
-  }
-
   // Fallback to Open-Meteo for broader city-level search
-  const openMeteoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=zh&format=json`;
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=zh&format=json`;
   
   try {
-    const response = await fetch(openMeteoUrl);
+    const response = await fetch(url);
     const data = await response.json();
     
     if (data.results && data.results.length > 0) {
@@ -216,7 +219,8 @@ export async function geocodeLocation(query: string): Promise<{ lat: number; lon
         lon: result.longitude,
         name: result.name,
         country: result.country,
-        admin1: result.admin1
+        admin1: result.admin1,
+        postcode: undefined // Open-Meteo free search doesn't reliably provide postcodes
       }));
     }
     return [];

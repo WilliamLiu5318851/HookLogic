@@ -2,6 +2,7 @@ export interface LocationData {
   latitude: number;
   longitude: number;
   city?: string;
+  postcode?: string;
 }
 
 export interface WeatherData {
