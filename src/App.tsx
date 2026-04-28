@@ -33,7 +33,7 @@ import {
   Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LocationData, WeatherData, TideData, MoonData, FishingAnalysis, HourlyForecast } from './types';
+import { UserLevel, LocationData, WeatherData, TideData, MoonData, FishingAnalysis, HourlyForecast, SpeciesSpecificAnalysis } from './types';
 import { fetchWeatherData, fetchMarineData, getMoonData, geocodeLocation } from './services/weatherService';
 import { fetchQuickAnalysis, fetchDeepAnalysis } from './services/geminiService';
 import { i18n, type Language } from './translations';
@@ -89,6 +89,12 @@ const getMoonPhaseLabel = (key: string, lang: Language) => {
 export default function App() {
   const [lang, setLang] = useState<Language>('zh');
   const t = i18n[lang];
+  const [userLevel, setUserLevel] = useState<UserLevel>('beginner');
+  const [catches, setCatches] = useState<any[]>(() => {
+    const saved = localStorage.getItem('hooklogic_catches');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [isJournalVisible, setIsJournalVisible] = useState(false);
   const [location, setLocation] = useState<LocationData | null>(null);
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [tide, setTide] = useState<TideData | null>(null);
@@ -328,7 +334,7 @@ export default function App() {
   };
 
   const activeData = getActiveData();
-  const hasDeepData = (activeData as any)?.isDeep || selectedFish === '通用';
+  const hasDeepData = activeData?.isDeep || selectedFish === '通用';
 
   const getFishDisplayName = (fish: string, currentLang: Language) => {
     if (fish === '通用') return t.fishGeneral;
@@ -572,33 +578,40 @@ export default function App() {
     <div className="min-h-screen bg-app-bg text-text-dark font-sans selection:bg-accent/30 pb-10">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-primary text-white px-4 md:px-8 py-3 md:h-20 flex flex-col md:flex-row items-center justify-between shadow-md gap-3">
-        <div className="flex items-center justify-between w-full md:w-auto">
+        <div className="flex items-center justify-between w-full md:w-auto shrink-0">
           <div className="flex items-center gap-2">
             <Fish size={24} className="text-accent" />
-            <h1 className="text-base md:text-lg font-bold tracking-wider uppercase">HOOKLOGIC <span className="font-normal opacity-80 hidden sm:inline">{t.appDesc}</span></h1>
+            <h1 className="text-base md:text-lg font-bold tracking-wider uppercase">HOOKLOGIC</h1>
           </div>
-          
-          <div className="flex md:hidden items-center gap-2">
+          <div className="md:hidden flex items-center gap-2">
             <button 
-              onClick={() => {
-                const newLang = lang === 'zh' ? 'en' : 'zh';
-                setLang(newLang);
-                if (location) fetchDataForCoords(location.latitude, location.longitude, locationName || undefined, newLang);
-              }}
-              className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors font-bold text-xs"
+              onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+              className="px-2 py-1 bg-white/10 rounded font-bold text-[10px]"
             >
               {lang === 'zh' ? 'EN' : '中'}
-            </button>
-            <button 
-              onClick={initData}
-              className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
-            >
-              <RefreshCw size={16} />
             </button>
           </div>
         </div>
 
-        <div className="w-full md:flex-1 md:max-w-md md:mx-8 relative" ref={searchRef}>
+        {/* Mode Selector */}
+        <div className="flex bg-white/10 p-1 rounded-full border border-white/10 shrink-0">
+          {(['beginner', 'intermediate', 'expert'] as UserLevel[]).map((level) => (
+            <button
+              key={level}
+              onClick={() => setUserLevel(level)}
+              className={cn(
+                "px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-tight transition-all",
+                userLevel === level 
+                  ? "bg-accent text-primary shadow-lg" 
+                  : "text-white/60 hover:text-white"
+              )}
+            >
+              {t.modes[level].name}
+            </button>
+          ))}
+        </div>
+
+        <div className="w-full md:flex-1 md:max-w-xs relative" ref={searchRef}>
           <form onSubmit={handleSearch} className="relative group">
             <input 
               type="text" 
@@ -867,18 +880,60 @@ export default function App() {
               </button>
             </div>
 
-            <div className="mt-8 text-[10px] uppercase tracking-widest font-bold opacity-60 mb-4 md:mb-6">
+            <div className="mt-8 text-[10px] uppercase tracking-widest font-bold opacity-60 mb-2 md:mb-4">
               {isForecastMode ? `${t.tomorrowForecast} ${t.fishingIndex}` : t.fishingIndex}
             </div>
             
-            <div className="relative w-28 h-28 md:w-36 md:h-36 mx-auto mb-4 md:mb-6 flex flex-col items-center justify-center border-8 border-white/10 rounded-full">
-              <div className="absolute inset-0 border-t-8 border-accent rounded-full rotate-45" />
-              <span className="text-4xl md:text-5xl font-black">
-                {activeData?.score}
-              </span>
-              <span className="text-xs opacity-60">/ 100</span>
+            <div className="flex flex-col items-center mb-6">
+              <div className="relative w-24 h-24 md:w-28 md:h-28 flex flex-col items-center justify-center border-4 border-white/10 rounded-full">
+                <div className="absolute inset-0 border-t-4 border-accent rounded-full rotate-45" />
+                <span className="text-3xl md:text-4xl font-black">
+                  {activeData?.score}
+                </span>
+                <span className="text-[10px] opacity-60">/ 100</span>
+              </div>
+              
+              {/* Safety Score Badge */}
+              <div className="mt-4 flex items-center gap-2 bg-white/10 px-3 py-1 rounded-full border border-white/5">
+                <div className={cn(
+                  "w-2 h-2 rounded-full animate-pulse",
+                  (activeData?.safetyScore || 0) >= 70 ? "bg-success" : 
+                  (activeData?.safetyScore || 0) >= 40 ? "bg-amber-400" : "bg-red-500"
+                )} />
+                <span className="text-[10px] font-bold uppercase tracking-tight">
+                  {t.safetyScore}: {activeData?.safetyScore || '--'}
+                </span>
+              </div>
             </div>
-            <div className="text-xl font-bold text-accent mb-4">
+
+            {/* Sub Scores Bars */}
+            {userLevel !== 'beginner' && (
+              <div className="space-y-3 mb-6 px-2">
+                {[
+                  { label: t.subScores.temperature, value: activeData?.subScores?.temperature, color: 'bg-orange-400' },
+                  { label: t.subScores.tide, value: activeData?.subScores?.tide, color: 'bg-blue-400' },
+                  { label: t.subScores.weather, value: activeData?.subScores?.weather, color: 'bg-emerald-400' },
+                  { label: t.subScores.moon, value: activeData?.subScores?.moon, color: 'bg-purple-400' },
+                  { label: t.subScores.species, value: activeData?.subScores?.species, color: 'bg-accent' },
+                ].map((sub, i) => (
+                  <div key={i} className="space-y-1">
+                    <div className="flex justify-between text-[8px] uppercase font-bold opacity-60">
+                      <span>{sub.label}</span>
+                      <span>{sub.value || 0}%</span>
+                    </div>
+                    <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${sub.value || 0}%` }}
+                        className={cn("h-full rounded-full", sub.color)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="text-lg font-bold text-accent mb-4">
               {activeData?.score && activeData.score >= 80 ? (isForecastMode ? t.forecastExcellent : t.scoreDescExcellent) : 
                activeData?.score && activeData.score >= 60 ? (isForecastMode ? t.forecastGood : t.scoreDescGood) : 
                activeData?.score && activeData.score >= 40 ? (isForecastMode ? t.forecastFair : t.scoreDescFair) : (isForecastMode ? t.forecastPoor : t.scoreDesc)}
@@ -996,19 +1051,123 @@ export default function App() {
           </div>
 
           {/* Tips Box */}
-          <div className="mt-auto bg-amber-50 border border-amber-200 p-5 rounded-xl">
-            <div className="text-sm font-bold text-amber-800 mb-2 flex items-center gap-2">
-              <Info size={16} />
-              {t.expertInsight}
+          <div className="mt-auto space-y-4">
+            <div className="bg-amber-50 border border-amber-200 p-5 rounded-xl">
+              <div className="text-sm font-bold text-amber-800 mb-2 flex items-center gap-2">
+                <Info size={16} />
+                {t.expertInsight}
+              </div>
+              <p className="text-xs text-amber-800/80 leading-relaxed mb-4">
+                {activeData?.summary}
+              </p>
+              
+              {activeData?.why && activeData.why.length > 0 && (
+                <div className="space-y-2 border-t border-amber-200 pt-3">
+                  <div className="text-[10px] font-bold text-amber-900/60 uppercase tracking-widest mb-2">
+                    {t.whyTitle}
+                  </div>
+                  {activeData.why.map((reason, i) => (
+                    <div key={i} className="flex gap-2 items-start text-[10px] text-amber-800/70">
+                      <CheckCircle2 size={12} className="text-amber-500 shrink-0 mt-0.5" />
+                      <span>{reason}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <p className="text-xs text-amber-800/80 leading-relaxed">
-              {activeData?.recommendations?.[0] || (lang === 'zh' ? "气压上升期间，鱼类活性显著增强。建议尝试深浅交替区。" : "Fishing activity increases significantly during rising pressure. Try drop-off areas.")}
-            </p>
+
+            {/* Beginner Specific Quick Advice */}
+            {userLevel === 'beginner' && (
+              <div className="bg-primary/5 border border-primary/10 p-5 rounded-xl">
+                <div className="text-xs font-bold text-primary mb-3 flex items-center gap-2 uppercase tracking-tight">
+                  <Zap size={14} className="text-accent" />
+                  {lang === 'zh' ? '新手极速建议' : 'Newbie Quick Start'}
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="flex flex-col">
+                    <span className="text-[8px] font-bold text-text-light uppercase">{t.baitSuggestion}</span>
+                    <span className="text-[11px] font-medium">{activeData?.baitSuggestion}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[8px] font-bold text-text-light uppercase">{t.technique}</span>
+                    <span className="text-[11px] font-medium">{activeData?.techniqueSuggestion}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[8px] font-bold text-text-light uppercase">{t.activeTime}</span>
+                    <span className="text-[11px] font-medium">{activeData?.bestTime}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </aside>
 
         {/* Content Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* TOP RECOMMENDATIONS FOR BEGINNERS */}
+          {userLevel === 'beginner' && (
+            <div className="md:col-span-2 space-y-4">
+              <div className="text-[10px] uppercase tracking-widest font-bold text-text-light flex items-center gap-2">
+                <Star size={14} className="text-accent fill-accent" />
+                {lang === 'zh' ? '今日首选推荐' : 'Top Recommendations Today'}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Object.entries(analysis?.speciesAnalysis || {})
+                  .sort(([, a], [, b]) => {
+                    const sa = a as SpeciesSpecificAnalysis;
+                    const sb = b as SpeciesSpecificAnalysis;
+                    return (sb.score * (sb.beginnerSuitability || 50)) - (sa.score * (sa.beginnerSuitability || 50));
+                  })
+                  .slice(0, 3)
+                  .map(([name, speciesData]) => {
+                    const data = speciesData as SpeciesSpecificAnalysis;
+                    return (
+                    <motion.button
+                      key={name}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        setSelectedFish(name);
+                        setUserLevel('intermediate');
+                      }}
+                      className="bg-white border-2 border-primary/5 rounded-2xl p-4 text-left shadow-sm hover:shadow-md hover:border-accent/30 transition-all group flex flex-col h-full"
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex flex-col">
+                          <span className="text-lg font-black text-primary leading-tight">
+                            {getFishDisplayName(name, lang)}
+                          </span>
+                          <span className="text-[10px] font-bold text-accent opacity-70">
+                            {getFishSecondaryName(name, lang)}
+                          </span>
+                        </div>
+                        <div className="bg-primary/5 text-primary px-2 py-1 rounded-lg flex flex-col items-center">
+                          <span className="text-sm font-black leading-none">{data.score}</span>
+                          <span className="text-[8px] font-bold uppercase opacity-60">Score</span>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-auto space-y-2">
+                        <div className="flex justify-between text-[8px] font-bold uppercase text-text-light mb-1">
+                          <span>{t.beginnerSuitability}</span>
+                          <span className="text-primary">{data.beginnerSuitability}%</span>
+                        </div>
+                        <div className="h-1 bg-primary/5 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-accent" 
+                            style={{ width: `${data.beginnerSuitability}%` }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-text-light line-clamp-2 mt-2 leading-relaxed">
+                          {data.summary}
+                        </p>
+                      </div>
+                    </motion.button>
+                  );})}
+              </div>
+            </div>
+          )}
+
           {/* Weather Card */}
           <div className="bg-card-bg border border-app-border rounded-xl p-6 shadow-sm">
             {/* Weather Alerts */}
@@ -1328,7 +1487,7 @@ export default function App() {
                       </div>
                       <h4 className="text-lg font-black text-primary uppercase">{t.deepAnalysis}</h4>
                       <p className="text-xs text-text-light max-w-[280px] mb-4">
-                        {lang === 'zh' ? '当前为极速概览模式，深度研判将调动更高级 AI 模型分析季节洄游、气压精算及专业钓组规格。' : 'Quick overview mode. Deep analysis uses advanced AI for migration, pressure precision, and pro gear specs.'}
+                        {lang === 'zh' ? '当前为极速概览模式。开启深度模式将激活 14 维度多向水文分析，计算季节洄游、产卵周期、海况风险及专业钓组规格。' : 'Quick mode. Deep analysis activates 14-dimensional hydrological modeling for migration, spawning cycles, marine risk, and pro gear specs.'}
                       </p>
                       <button 
                         onClick={handleDeepAnalysis}
@@ -1576,6 +1735,89 @@ export default function App() {
         <p>{t.footer.copy}</p>
         <p className="mt-2 opacity-60 font-medium">{t.footer.disclaimer}</p>
       </footer>
+
+      {/* Catch Journal Floating Panel */}
+      <AnimatePresence>
+        {isJournalVisible && (
+          <motion.div 
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            className="fixed inset-x-0 bottom-0 z-[100] bg-white border-t-2 border-primary/10 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] rounded-t-3xl max-h-[80vh] overflow-hidden flex flex-col md:max-w-xl md:mx-auto"
+          >
+            <div className="p-4 border-b flex justify-between items-center bg-slate-50">
+              <h3 className="font-black text-primary tracking-tight">{t.journal.title}</h3>
+              <button onClick={() => setIsJournalVisible(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <button 
+                onClick={() => {
+                  const newCatch = {
+                    id: Date.now(),
+                    species: selectedFish === '通用' ? 'Snapper' : selectedFish,
+                    length: 35,
+                    bait: activeData?.baitSuggestion?.split(',')[0] || 'Prawn',
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    date: new Date().toLocaleDateString()
+                  };
+                  const updated = [newCatch, ...catches];
+                  setCatches(updated);
+                  localStorage.setItem('hooklogic_catches', JSON.stringify(updated));
+                }}
+                className="w-full py-4 bg-primary text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform"
+              >
+                <RefreshCw size={18} className="text-accent" />
+                {t.journal.add}
+              </button>
+
+              {catches.length === 0 ? (
+                <div className="py-12 text-center text-text-light opacity-50 flex flex-col items-center gap-3">
+                  <CheckCircle2 size={40} strokeWidth={1} />
+                  <p className="text-sm font-medium">{t.journal.noData}</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {catches.map((item) => (
+                    <div key={item.id} className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                          <Fish size={20} />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-sm">{getFishDisplayName(item.species, lang)}</span>
+                          <span className="text-[10px] text-text-light">{item.date} {item.time} | {item.bait}</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-black text-primary">{item.length} cm</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Global Journal Toggle */}
+      {location && (
+        <motion.button
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          onClick={() => setIsJournalVisible(true)}
+          className="fixed bottom-6 right-6 z-[90] w-14 h-14 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-90 transition-transform border-4 border-white"
+        >
+          <Calendar size={24} className="text-accent" />
+          {catches.length > 0 && (
+            <span className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
+              {catches.length}
+            </span>
+          )}
+        </motion.button>
+      )}
     </div>
   );
 }

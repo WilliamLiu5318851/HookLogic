@@ -1,6 +1,6 @@
 {
-  "name": "HOOKLOGIC - AI Fishing Intelligence",
-  "description": "基于水文生态学多维模型，结合实时气象、潮汐、月相数据，为钓鱼爱好者提供精准的鱼情分析与垂钓建议。",
+  "name": "HOOKLOGIC - Fish Feeding Probability System",
+  "description": "基于水文生态学的 14 维度 AI 预测系统，实时计算特定鱼种的捕食活跃度（Bite Score）与海况安全评分。",
   "requestFramePermissions": [
     "geolocation"
   ],

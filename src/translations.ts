@@ -3,7 +3,7 @@ export type Language = 'zh' | 'en';
 export const i18n = {
   zh: {
     appName: 'HOOKLOGIC',
-    appDesc: '智能垂钓助手',
+    appDesc: '捕食活跃度预测系统',
     realTimeUpdate: '实时更新',
     currentLocation: '当前作业坐标',
     searchPlaceholder: '搜索澳洲城市或钓点 (如: Sans Souci)...',
@@ -15,8 +15,8 @@ export const i18n = {
     loadingAnalysis: '专家研判中...',
     loadingDescription: '正在调取澳大利亚水文气象数据，结合 AI 模型计算最佳钓点与鱼情，请稍候。',
     landing: {
-      title: '精准预判，爆护之选',
-      subtitle: '全澳领先的 AI 智能垂钓分析系统',
+      title: '科学钓鱼，数据决策',
+      subtitle: '基于 14 维度水文生态模型的捕食活跃度预测系统',
       detectLocation: '自动定位当前钓点',
       search: '搜索',
       startPrompt: '输入钓点名称开启专业分析',
@@ -25,9 +25,36 @@ export const i18n = {
     error: '出错了',
     retry: '重试',
     targetSpecies: '目标鱼种',
+    userMode: '作业模式',
+    modes: {
+      beginner: {
+        name: '新手模式',
+        desc: '一键获取今日最适合鱼种与极速钓鱼建议'
+      },
+      intermediate: {
+        name: '进阶模式',
+        desc: '选择特定鱼种并查看详细模型研判数据'
+      },
+      expert: {
+        name: '老手模式',
+        desc: '全数据监控，包含 14 维度多向水文精算'
+      }
+    },
     todayLive: '今日实时',
     tomorrowForecast: '明日预测',
-    fishingIndex: '综合鱼情指数',
+    fishingIndex: '捕食活跃度 (Bite Score)',
+    safetyScore: '海况安全评分 (Safety)',
+    beginnerSuitability: '新手友好度',
+    whyTitle: '核心研判依据',
+    subScores: {
+      temperature: '水温适合度',
+      tide: '潮汐/水流',
+      weather: '天气稳定性',
+      moon: '月相/光照',
+      species: '鱼种季节性',
+      safety: '海况安全',
+      habitat: '钓点匹配度'
+    },
     tomorrowMoon: '明日月相',
     moonPhase: '月相数据',
     illumination: '照明度',
@@ -58,6 +85,19 @@ export const i18n = {
     baitSuggestion: '建议饵料',
     technique: '专业钓法',
     biteTimes: '最佳咬钩时段',
+    journal: {
+      title: '垂钓日志 (Catch Journal)',
+      add: '记录新的垂钓结果',
+      noData: '暂无记录，开启你的作业日志吧。',
+      fields: {
+        species: '鱼种',
+        length: '长度 (cm)',
+        weight: '重量 (kg)',
+        bait: '使用饵料',
+        time: '时间',
+        count: '数量'
+      }
+    },
     majorPeriod: '主要活跃期',
     minorPeriod: '次要活跃期',
     goldenWindow: '黄金窗口期',
@@ -81,8 +121,8 @@ export const i18n = {
     requestDeep: '点击开启深度高算力研判 (耗时较长)',
     deepLoading: '正在调动高级 AI 模型进行多维测算...',
     footer: {
-      copy: '© 2026 HOOKLOGIC - 智能垂钓决策系统',
-      disclaimer: '数据基于多维水文模型与 AI 综合分析，仅供参考'
+      copy: '© 2026 HOOKLOGIC - Fish Feeding Probability System',
+      disclaimer: '数据基于 14 维度多向水文分析模型与 AI 研判，仅供参考。'
     },
     weatherAlerts: {
       thunderstorm: {
@@ -140,7 +180,7 @@ export const i18n = {
   },
   en: {
     appName: 'HOOKLOGIC',
-    appDesc: 'AI Fishing Assistant',
+    appDesc: 'Fish Feeding Probability System',
     realTimeUpdate: 'LIVE',
     currentLocation: 'CURRENT COORD',
     searchPlaceholder: 'Search AU city or spot (e.g. Sans Souci)...',
@@ -152,8 +192,8 @@ export const i18n = {
     loadingAnalysis: 'AI Expert Analysis...',
     loadingDescription: 'Retrieving AU hydro-meteorological data. AI is calculating best spots and bite activity, please wait.',
     landing: {
-      title: 'Precision Strikes, Every Time',
-      subtitle: 'AU\'s Premier AI-Driven Fishing Intelligence System',
+      title: 'Science-Based Fishing',
+      subtitle: 'Bite Score Prediction System based on 14-dimensional Eco-models',
       detectLocation: 'Locate My Current Spot',
       search: 'Search',
       startPrompt: 'Enter a location to start analysis',
@@ -162,9 +202,36 @@ export const i18n = {
     error: 'Error',
     retry: 'Retry',
     targetSpecies: 'Target Species',
+    userMode: 'Operation Mode',
+    modes: {
+      beginner: {
+        name: 'Newbie',
+        desc: 'One-click best species & quick advice'
+      },
+      intermediate: {
+        name: 'Advanced',
+        desc: 'Select species & detailed model data'
+      },
+      expert: {
+        name: 'Pro',
+        desc: 'Full 14-dimension hydrological monitoring'
+      }
+    },
     todayLive: 'TODAY LIVE',
     tomorrowForecast: 'TOMORROW',
-    fishingIndex: 'Fishing Index',
+    fishingIndex: 'Bite Score',
+    safetyScore: 'Safety Score (Safety)',
+    beginnerSuitability: 'Beginner Friendly',
+    whyTitle: 'Core Analysis Basis',
+    subScores: {
+      temperature: 'Temp Suitability',
+      tide: 'Tide/Current',
+      weather: 'Weather Stability',
+      moon: 'Moon/Light',
+      species: 'Seasonality',
+      safety: 'Marine Safety',
+      habitat: 'Habitat Match'
+    },
     tomorrowMoon: 'Tomorrow Moon',
     moonPhase: 'Moon Phase',
     illumination: 'Illumination',
@@ -195,6 +262,19 @@ export const i18n = {
     baitSuggestion: 'Bait/Lure',
     technique: 'Technique',
     biteTimes: 'Bite Times',
+    journal: {
+      title: 'Catch Journal',
+      add: 'Record New Catch',
+      noData: 'No records yet. Start your logbook today.',
+      fields: {
+        species: 'Species',
+        length: 'Length (cm)',
+        weight: 'Weight (kg)',
+        bait: 'Bait Used',
+        time: 'Time',
+        count: 'Count'
+      }
+    },
     majorPeriod: 'Major Period',
     minorPeriod: 'Minor Period',
     goldenWindow: 'Golden Window',
@@ -218,8 +298,8 @@ export const i18n = {
     requestDeep: 'Request Deep AI Analysis (Takes longer)',
     deepLoading: 'Mobilizing Advanced AI for multi-dimensional calculation...',
     footer: {
-      copy: '© 2026 HOOKLOGIC - AI Fishing Intelligence',
-      disclaimer: 'Data based on multi-dimensional hydrological models and AI analysis. Ref use only.'
+      copy: '© 2026 HOOKLOGIC - Fish Feeding Probability System',
+      disclaimer: 'Data based on 14-dimensional hydrological models and AI analysis. Ref use only.'
     },
     weatherAlerts: {
       thunderstorm: {

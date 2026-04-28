@@ -1,3 +1,5 @@
+export type UserLevel = 'beginner' | 'intermediate' | 'expert';
+
 export interface LocationData {
   latitude: number;
   longitude: number;
@@ -46,7 +48,19 @@ export interface HourlyForecast {
 
 export interface SpeciesSpecificAnalysis {
   score: number;
+  beginnerSuitability?: number; // 0-100
+  safetyScore?: number; // 0-100 safety rating
+  subScores?: {
+    temperature: number;
+    tide: number;
+    weather: number;
+    moon: number;
+    species: number;
+    safety: number;
+    habitat: number;
+  };
   summary: string;
+  why: string[]; // Transparent explanation of why the score is this way
   recommendations: string[];
   bestTime: string;
   targetDepth: string;
@@ -58,11 +72,23 @@ export interface SpeciesSpecificAnalysis {
   leaderSuggestion?: string;
   tackleSuggestion?: string;
   hourlyTrends?: { time: string; score: number }[];
+  isDeep?: boolean; // Indicates if this is the high-compute model output
 }
 
 export interface FishingAnalysis {
   score: number; // 0 to 100 (General)
+  safetyScore?: number;
+  subScores?: {
+    temperature: number;
+    tide: number;
+    weather: number;
+    moon: number;
+    species: number;
+    safety: number;
+    habitat: number;
+  };
   summary: string;
+  why?: string[];
   recommendations: string[];
   bestTime: string;
   targetDepth: string;
